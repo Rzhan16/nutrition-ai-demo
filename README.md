@@ -2,6 +2,16 @@
 
 A professional AI-powered nutrition supplement analysis application built with Next.js 14 and OpenAI GPT-4. Scan supplement labels, get comprehensive nutritional insights, and make informed health decisions.
 
+## 🚀 Live Demo
+
+**[View Live Demo](https://nutrition-ai-demo.vercel.app)** (Coming Soon)
+
+For now, you can run the project locally:
+```bash
+npm run dev
+# Open http://localhost:3000
+```
+
 ## 🎯 Project Overview
 
 This demo application showcases an AI-powered nutrition analysis platform designed for the UBC community and health-conscious individuals. It provides instant supplement analysis through OCR scanning and database search, delivering professional-grade nutritional insights.
@@ -188,6 +198,34 @@ npm run start        # Start production server
 npm run lint         # Run ESLint
 npm run type-check   # Run TypeScript checks
 ```
+
+## 🚀 Deployment
+
+### Deploy to Vercel (Recommended)
+
+1. **Create a Vercel account** at [vercel.com](https://vercel.com)
+2. **Connect your GitHub repository**:
+   ```bash
+   npm install -g vercel
+   vercel login
+   vercel --prod
+   ```
+3. **Set environment variables** in Vercel dashboard:
+   - `OPENAI_API_KEY`: Your OpenAI API key
+   - `DATABASE_URL`: Database connection string (when implemented)
+
+### Deploy to Netlify
+
+1. Connect your GitHub repository to Netlify
+2. Set build command: `npm run build`
+3. Set publish directory: `.next`
+4. Add environment variables in Netlify dashboard
+
+### Deploy to Railway
+
+1. Connect GitHub repository to Railway
+2. Railway will auto-detect Next.js and deploy
+3. Add environment variables in Railway dashboard
 
 ## 🤝 Contributing
 
