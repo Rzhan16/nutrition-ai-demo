@@ -9,19 +9,27 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Custom blue and green color scheme for trust and health
+        // Professional & Accessible Color System
         primary: {
-          50: '#eff6ff',
-          100: '#dbeafe',
-          200: '#bfdbfe',
-          300: '#93c5fd',
-          400: '#60a5fa',
-          500: '#3b82f6',
-          600: '#2563eb',
-          700: '#1d4ed8',
-          800: '#1e40af',
-          900: '#1e3a8a',
+          50: 'rgb(var(--primary-50))', // #EFF6FF
+          100: 'rgb(var(--primary-100))', // #DBEAFE
+          600: 'rgb(var(--primary-600))', // #2563EB
         },
+        
+        // Text colors with high contrast
+        'text-dark': 'rgb(var(--text-dark))', // #1F2937
+        'text-light': 'rgb(var(--text-light))', // #6B7280
+        
+        // Background colors
+        'bg-card': 'rgb(var(--background-card))', // #FFFFFF
+        'bg-section': 'rgb(var(--background-section))', // #F9FAFB
+        
+        // Status colors
+        'status-success': 'rgb(var(--status-success))', // #10B981
+        'status-error': 'rgb(var(--status-error))', // #EF4444
+        'status-warning': 'rgb(var(--status-warning))', // #F59E0B
+        
+        // Legacy colors for existing components
         health: {
           50: '#f0fdf4',
           100: '#dcfce7',
@@ -33,18 +41,6 @@ const config: Config = {
           700: '#15803d',
           800: '#166534',
           900: '#14532d',
-        },
-        accent: {
-          50: '#fafafa',
-          100: '#f4f4f5',
-          200: '#e4e4e7',
-          300: '#d4d4d8',
-          400: '#a1a1aa',
-          500: '#71717a',
-          600: '#52525b',
-          700: '#3f3f46',
-          800: '#27272a',
-          900: '#18181b',
         },
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',

@@ -3,16 +3,16 @@ import { ArrowRight, Scan, Brain, Shield, Users, CheckCircle, Zap } from 'lucide
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
+    <div className="min-h-screen bg-bg-section">
       {/* Hero Section */}
       <section className="relative px-6 lg:px-8">
         <div className="mx-auto max-w-7xl pt-20 pb-32 sm:pt-24 sm:pb-40">
           <div className="text-center">
-            <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-6xl">
+            <h1 className="text-4xl font-bold tracking-tight text-text-dark sm:text-6xl">
               AI-Powered{' '}
               <span className="text-gradient">Nutrition Analysis</span>
             </h1>
-            <p className="mt-6 text-lg leading-8 text-gray-600 max-w-3xl mx-auto">
+            <p className="mt-6 text-lg leading-8 text-text-light max-w-3xl mx-auto">
               Scan supplement labels instantly, get AI-powered nutritional analysis, 
               and make informed decisions about your health supplements. 
               Built for the UBC community and health-conscious individuals.

@@ -231,16 +231,16 @@ export function FileUpload({
             </div>
             
             <div>
-              <h3 className="text-lg font-medium text-white mb-2">
+              <h3 className="text-lg font-medium text-text-dark mb-2">
                 Upload Supplement Label
               </h3>
-              <p className="text-gray-200 mb-4">
+              <p className="text-text-light mb-4">
                 Drag and drop your supplement image here, or click to browse
               </p>
               
               <div 
                 id={`${fileId}-description`}
-                className="text-sm text-gray-300 space-y-1"
+                className="text-sm text-text-light space-y-1"
               >
                 <p>Supported formats: {acceptedTypes.join(', ').toUpperCase()}</p>
                 <p>Maximum size: {formatFileSize(maxSize)}</p>
