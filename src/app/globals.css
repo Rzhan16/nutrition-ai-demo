@@ -1,35 +1,27 @@
 @import "tailwindcss";
 
 :root {
-  /* 🎨 TRUST & VITALITY FUSION DESIGN SYSTEM */
+  /* 🎨 CLEAN PROFESSIONAL DESIGN SYSTEM */
   
-  /* 🤍 Pure Foundation - Scientific Trust */
-  --pure-white: 255 255 255; /* Pure laboratory white */
-  --pure-light: 252 252 253; /* Subtle off-white */
-  --pure-gray: 248 249 250; /* Clean neutral background */
-  --pure-border: 240 241 243; /* Minimal borders */
+  /* 🤍 Foundation Colors */
+  --background-main: 247 249 252; /* #f7f9fc */
+  --surface-white: 255 255 255; /* Pure white */
+  --border-light: 229 231 235; /* Light gray borders */
   
-  /* 🎨 Modern Health Tech Palette - Research-Based */
-  --vitality-primary: 59 130 246; /* Modern blue #3B82F6 */
-  --vitality-secondary: 16 185 129; /* Medical green #10B981 */
-  --vitality-accent: 139 92 246; /* Innovation purple #8B5CF6 */
-  --vitality-gradient: linear-gradient(135deg, rgb(59 130 246) 0%, rgb(16 185 129) 100%);
+  /* 🔵 Vibrant Gradient Colors */
+  --vibrant-start: 32 189 255; /* #20BDFF */
+  --vibrant-end: 165 180 252; /* #a5b4fc */
+  --gradient-purple-start: 165 180 252; /* #a5b4fc */
+  --gradient-purple-end: 129 140 248; /* #818cf8 */
   
-  /* 📝 Scientific Typography */
-  --text-primary: 15 23 42; /* Deep charcoal for authority */
-  --text-secondary: 71 85 105; /* Medium gray for readability */
-  --text-accent: 59 130 246; /* Modern blue for highlights */
+  /* 📝 Typography Colors */
+  --text-primary: 51 51 51; /* #333 */
+  --text-secondary: 107 114 128; /* #6b7280 */
+  --text-dark: 31 41 55; /* #1f2937 */
   
-  /* 🔬 Medical Grade Surfaces */
-  --surface-pure: 255 255 255; /* Clean white cards */
-  --surface-elevated: 252 252 253; /* Subtle elevation */
-  --surface-interactive: 248 250 252; /* Hover states */
-  
-  /* 🎯 Functional Colors */
-  --success-fresh: 16 185 129; /* Medical green success */
-  --warning-energy: 245 158 11; /* Professional amber */
-  --error-clinical: 239 68 68; /* Clinical red */
-  --info-trust: 59 130 246; /* Modern blue */
+  /* 🎨 Gradients */
+  --gradient-vibrant: linear-gradient(to right, rgb(32 189 255), rgb(165 180 252));
+  --gradient-purple: linear-gradient(to right, rgb(165 180 252), rgb(129 140 248));
   
   /* Legacy mappings for existing components */
   --background: 249 250 251; /* Light background */
@@ -133,10 +125,9 @@
 }
 
 body {
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  font-feature-settings: "rlig" 1, "calt" 1;
+  font-family: 'Inter', sans-serif;
+  background-color: rgb(var(--background-main));
+  color: rgb(var(--text-primary));
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -293,52 +284,37 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-/* 🏥 Medical-Grade Components */
-.medical-card {
-  background: rgb(var(--surface-pure));
-  border: 1px solid rgb(var(--pure-border));
-  border-radius: 16px;
-  box-shadow: var(--shadow-pure);
-  transition: var(--transition-smooth);
-  position: relative;
-  overflow: hidden;
+/* 🏥 Clean Professional Components */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.5rem;
 }
 
-.medical-card:hover {
-  box-shadow: var(--shadow-premium);
-  transform: translateY(-4px);
-  border-color: rgb(var(--vitality-primary) / 0.2);
+.card {
+  background-color: rgb(var(--surface-white));
+  border-radius: 1.5rem;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+  padding: 2.5rem;
 }
 
-.medical-card:before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: var(--gradient-energy);
-  opacity: 0;
-  transition: var(--transition-smooth);
-}
-
-.medical-card:hover:before {
-  opacity: 1;
-}
-
-/* ⚡ Vitality Action Cards */
-.vitality-card {
-  background: var(--gradient-energy);
-  border: none;
-  border-radius: 20px;
-  box-shadow: var(--shadow-vitality);
-  transition: var(--transition-bounce);
+.btn-vibrant {
+  background: var(--gradient-vibrant);
   color: white;
+  transition: transform 0.2s ease-in-out;
+  border-radius: 9999px;
+  padding: 0.75rem 2rem;
+  font-weight: 600;
+  display: inline-block;
+  text-decoration: none;
 }
 
-.vitality-card:hover {
-  transform: translateY(-6px) scale(1.02);
-  box-shadow: var(--shadow-dramatic);
+.btn-vibrant:hover {
+  transform: translateY(-2px);
+}
+
+.gradient-bg {
+  background: var(--gradient-purple);
 }
 
 /* Professional button styles */

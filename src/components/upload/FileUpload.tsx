@@ -186,14 +186,13 @@ export function FileUpload({
       {/* Upload Area */}
       <div
         className={cn(
-          'relative border-2 border-dashed rounded-lg transition-all duration-200',
-          'medical-card cursor-pointer',
-          dragActive && 'drag-over',
-          uploadSuccess && 'drag-accept',
-          error && 'drag-reject',
+          'relative border-2 border-dashed border-border-light rounded-lg transition-all duration-200',
+          'bg-surface-white cursor-pointer p-8 text-center',
+          dragActive && 'border-vibrant-start bg-blue-50',
+          uploadSuccess && 'border-green-500 bg-green-50',
+          error && 'border-red-500 bg-red-50',
           disabled && 'opacity-50 cursor-not-allowed',
-          loading && 'pointer-events-none',
-          !selectedFile && 'p-8 text-center'
+          loading && 'pointer-events-none'
         )}
         onDragEnter={handleDrag}
         onDragLeave={handleDrag}
@@ -226,36 +225,24 @@ export function FileUpload({
         {!selectedFile ? (
           /* Upload prompt */
           <div className="space-y-4">
-            <div className="relative mx-auto flex items-center justify-center h-24 w-24 rounded-3xl bg-gradient-to-br from-vitality-primary to-vitality-secondary mb-6 shadow-lg">
-              <Upload className="h-12 w-12 text-white" aria-hidden="true" />
-              <div className="absolute -inset-2 bg-gradient-to-br from-vitality-primary to-vitality-secondary rounded-3xl blur opacity-20"></div>
+            <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-gray-100 mb-4">
+              <Upload className="h-8 w-8 text-text-secondary" aria-hidden="true" />
             </div>
             
             <div>
-              <h3 className="text-2xl font-bold text-text-primary mb-4">
-                📱 Upload Supplement Label
-                <span className="block text-sm font-medium text-text-accent mt-1">Smart Image Recognition</span>
+              <h3 className="text-lg font-semibold text-text-dark mb-2">
+                Upload Supplement Label
               </h3>
-              <p className="text-text-secondary mb-6 text-lg">
-                Drag and drop or click to upload supplement photos for AI ingredient recognition
+              <p className="text-text-secondary mb-4">
+                Drag and drop or click to upload photos
               </p>
               
               <div 
                 id={`${fileId}-description`}
-                className="text-sm text-text-secondary space-y-2 bg-surface-elevated p-4 rounded-xl border border-pure-border"
+                className="text-sm text-text-secondary space-y-1"
               >
-                <p className="flex items-center gap-2">
-                  <span className="w-2 h-2 bg-success rounded-full"></span>
-                  Supported formats: {acceptedTypes.join(', ').toUpperCase()}
-                </p>
-                <p className="flex items-center gap-2">
-                  <span className="w-2 h-2 bg-info rounded-full"></span>
-                  Maximum file size: {formatFileSize(maxSize)}
-                </p>
-                <p className="flex items-center gap-2">
-                  <span className="w-2 h-2 bg-warning rounded-full"></span>
-                  Best results: Clear, well-lit label photos
-                </p>
+                <p>Supported: {acceptedTypes.join(', ').toUpperCase()}</p>
+                <p>Max size: {formatFileSize(maxSize)}</p>
               </div>
             </div>
 

@@ -1,243 +1,122 @@
 import Link from 'next/link';
-import { ArrowRight, Scan, Brain, Shield, Users, CheckCircle, Zap } from 'lucide-react';
+import { FlaskConical } from 'lucide-react';
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-bg-section">
+    <div className="min-h-screen bg-bg-main">
       {/* Hero Section */}
-      <section className="relative px-6 lg:px-8">
-        <div className="mx-auto max-w-7xl pt-20 pb-32 sm:pt-24 sm:pb-40">
-          <div className="text-center">
-            <h1 className="text-4xl font-bold tracking-tight text-text-dark sm:text-6xl">
-              AI-Powered{' '}
-              <span className="text-gradient">Nutrition Analysis</span>
-            </h1>
-            <p className="mt-6 text-lg leading-8 text-text-light max-w-3xl mx-auto">
-              Scan supplement labels instantly, get AI-powered nutritional analysis, 
-              and make informed decisions about your health supplements. 
-              Built for health-conscious individuals seeking professional guidance.
-            </p>
-            <div className="mt-10 flex items-center justify-center gap-x-6">
-              <Link
-                href="/analyze"
-                className="btn-primary inline-flex items-center gap-2 text-sm font-semibold shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-              >
-                Start Analysis
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-              <Link
-                href="#features"
-                className="btn-secondary text-sm font-semibold leading-6"
-              >
-                Learn more <span aria-hidden="true">→</span>
-              </Link>
-            </div>
+      <main>
+        <div className="container py-16 text-center">
+          <h2 className="text-5xl font-extrabold text-text-dark leading-tight mb-4">
+            Your Personal Nutrition Advisor
+          </h2>
+          <p className="text-lg text-text-secondary max-w-2xl mx-auto mb-8">
+            AI Nutrition Scanning & Personalized Recommendations. Scientifically customize your health plan.
+          </p>
+          <div className="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-4">
+            <Link href="/analyze" className="btn-vibrant">
+              Start AI Scanning Now
+            </Link>
+            <Link 
+              href="#about-section" 
+              className="bg-surface-white border border-border-light text-text-secondary px-8 py-3 rounded-full text-lg font-semibold shadow-md hover:bg-gray-50 transition-colors"
+            >
+              Learn More
+            </Link>
           </div>
         </div>
-      </section>
 
-      {/* Features Section */}
-      <section id="features" className="py-24 sm:py-32">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
-              Comprehensive Nutrition Intelligence
-            </h2>
-            <p className="mt-6 text-lg leading-8 text-gray-600">
-              Professional-grade analysis powered by AI and backed by scientific research
+        {/* AI Scan Section */}
+        <section id="scan-section" className="container py-16">
+          <div className="card text-center">
+            <h3 className="text-3xl font-bold text-text-dark mb-6">
+              AI Nutrition Scanning & Smart Analysis
+            </h3>
+            <p className="text-text-secondary mb-8">
+              Upload nutrition label images or directly enter supplement names. AI will provide professional analysis for you.
             </p>
-          </div>
-          
-          <div className="mx-auto mt-16 max-w-2xl sm:mt-20 lg:mt-24 lg:max-w-none">
-            <dl className="grid max-w-xl grid-cols-1 gap-x-8 gap-y-16 lg:max-w-none lg:grid-cols-3">
-              {/* OCR Scanning */}
-              <div className="flex flex-col medical-card p-6">
-                <dt className="flex items-center gap-x-3 text-base font-semibold leading-7 text-gray-900">
-                  <Scan className="h-5 w-5 flex-none text-blue-600" />
-                  OCR Label Scanning
-                </dt>
-                <dd className="mt-4 flex flex-auto flex-col text-base leading-7 text-gray-600">
-                  <p className="flex-auto">
-                    Upload supplement labels and get instant text extraction with ingredient identification. 
-                    Supports major brands like Pure Encapsulations, Thorne, and Life Extension.
-                  </p>
-                </dd>
+            <div className="flex flex-col md:flex-row items-center justify-center space-y-6 md:space-y-0 md:space-x-8">
+              <div className="w-full md:w-1/2">
+                <label htmlFor="search-input" className="sr-only">Enter supplement name</label>
+                <input 
+                  type="text" 
+                  id="search-input" 
+                  placeholder="e.g., Vitamin C or Pure Encapsulations" 
+                  className="w-full border border-border-light p-3 rounded-lg focus:ring-2 focus:ring-vibrant-start focus:border-transparent transition-all"
+                />
               </div>
-
-              {/* AI Analysis */}
-              <div className="flex flex-col medical-card p-6">
-                <dt className="flex items-center gap-x-3 text-base font-semibold leading-7 text-gray-900">
-                  <Brain className="h-5 w-5 flex-none text-green-600" />
-                  AI-Powered Analysis
-                </dt>
-                <dd className="mt-4 flex flex-auto flex-col text-base leading-7 text-gray-600">
-                  <p className="flex-auto">
-                    Get comprehensive nutritional breakdowns including benefits, dosage recommendations, 
-                    and safety information based on NIH and Health Canada guidelines.
-                  </p>
-                </dd>
-              </div>
-
-              {/* Safety & Trust */}
-              <div className="flex flex-col medical-card p-6">
-                <dt className="flex items-center gap-x-3 text-base font-semibold leading-7 text-gray-900">
-                  <Shield className="h-5 w-5 flex-none text-red-600" />
-                  Safety & Compliance
-                </dt>
-                <dd className="mt-4 flex flex-auto flex-col text-base leading-7 text-gray-600">
-                  <p className="flex-auto">
-                    Evidence-based recommendations with interaction warnings, 
-                    safety limits, and clear disclaimers. Your health data stays private.
-                  </p>
-                </dd>
-              </div>
-            </dl>
-          </div>
-        </div>
-      </section>
-
-      {/* Analysis Format Preview */}
-      <section className="py-24 sm:py-32 bg-gray-50">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
-              Professional Analysis Format
-            </h2>
-            <p className="mt-6 text-lg leading-8 text-gray-600">
-              Each supplement receives a comprehensive 8-point analysis in both English and Chinese
-            </p>
-          </div>
-          
-          <div className="mx-auto mt-16 max-w-4xl">
-            <div className="medical-card p-8">
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                    <span className="font-medium">基本介绍 (Basic Introduction)</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                    <span className="font-medium">主要益处 (Primary Benefits)</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                    <span className="font-medium">推荐摄入量 (RDA Guidelines)</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                    <span className="font-medium">可耐受最高摄入量 (Safety Limits)</span>
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                    <span className="font-medium">常见膳食来源 (Dietary Sources)</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                    <span className="font-medium">补充剂形式 (Supplement Forms)</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                    <span className="font-medium">适合关注的情况 (Usage Scenarios)</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                    <span className="font-medium">风险与注意事项 (Risks & Precautions)</span>
-                  </div>
-                </div>
+              <div className="w-full md:w-1/2">
+                <label className="block">
+                  <input 
+                    type="file" 
+                    className="block w-full text-sm text-text-secondary file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-text-secondary hover:file:bg-gray-200" 
+                  />
+                </label>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Demo Features */}
-      <section className="py-24 sm:py-32">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
-              Demo Features
-            </h2>
-            <p className="mt-6 text-lg leading-8 text-gray-600">
-              Experience the full potential of AI-powered nutrition analysis
-            </p>
-          </div>
-          
-          <div className="mx-auto mt-16 max-w-2xl sm:mt-20 lg:mt-24 lg:max-w-none">
-            <dl className="grid max-w-xl grid-cols-1 gap-x-8 gap-y-16 lg:max-w-none lg:grid-cols-2">
-              {/* Search & Upload */}
-              <div className="flex flex-col medical-card p-6">
-                <dt className="flex items-center gap-x-3 text-base font-semibold leading-7 text-gray-900">
-                  <Zap className="h-5 w-5 flex-none text-yellow-600" />
-                  Multiple Input Methods
-                </dt>
-                <dd className="mt-4 flex flex-auto flex-col text-base leading-7 text-gray-600">
-                  <p className="flex-auto">
-                    Upload supplement images for OCR scanning or search our database 
-                    of popular supplements with instant text-based queries.
-                  </p>
-                </dd>
+        {/* Sample Analysis Section */}
+        <section className="container py-16">
+          <div className="card">
+            <h3 className="text-3xl font-bold text-text-dark mb-6">AI Analysis Example: Zinc</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div>
+                <h4 className="text-xl font-semibold mb-2">1. Basic Introduction</h4>
+                <p className="text-text-secondary">
+                  Zinc is an essential mineral that plays multiple roles in the body. It is crucial for immune system function, protein synthesis, DNA repair, and wound healing.
+                </p>
               </div>
-
-              {/* Usage Tracking */}
-              <div className="flex flex-col medical-card p-6">
-                <dt className="flex items-center gap-x-3 text-base font-semibold leading-7 text-gray-900">
-                  <Users className="h-5 w-5 flex-none text-purple-600" />
-                  Usage Tracking
-                </dt>
-                <dd className="mt-4 flex flex-auto flex-col text-base leading-7 text-gray-600">
-                  <p className="flex-auto">
-                    Track your daily supplement usage with our login counter system. 
-                    Monitor compliance and build healthy habits.
-                  </p>
-                </dd>
+              <div>
+                <h4 className="text-xl font-semibold mb-2">2. Main Benefits</h4>
+                <ul className="text-text-secondary list-disc list-inside">
+                  <li>Enhance immunity</li>
+                  <li>Promote growth and development</li>
+                  <li>Maintain skin health</li>
+                  <li>Support metabolic functions</li>
+                </ul>
               </div>
-            </dl>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="bg-primary-600">
-        <div className="px-6 py-24 sm:px-6 sm:py-32 lg:px-8">
-          <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              Ready to optimize your nutrition?
-            </h2>
-            <p className="mx-auto mt-6 max-w-xl text-lg leading-8 text-blue-200">
-              Join UBC students and health enthusiasts using AI to make smarter supplement decisions.
-            </p>
-            <div className="mt-10 flex items-center justify-center gap-x-6">
-              <Link
-                href="/analyze"
-                className="rounded-md bg-white px-3.5 py-2.5 text-sm font-semibold text-blue-600 shadow-sm hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-              >
-                Start Free Analysis
-              </Link>
-              <Link href="#" className="text-sm font-semibold leading-6 text-white">
-                View Documentation <span aria-hidden="true">→</span>
-              </Link>
+              <div>
+                <h4 className="text-xl font-semibold mb-2">3. Recommended Daily Allowance (RDA)</h4>
+                <p className="text-text-secondary">
+                  Adult males ≈ 11 mg/day; Adult females ≈ 8 mg/day (Source: NIH ODS)
+                </p>
+              </div>
+              <div>
+                <h4 className="text-xl font-semibold mb-2">4. Tolerable Upper Intake Level (UL)</h4>
+                <p className="text-text-secondary">
+                  Adults ≈ 40 mg/day. Exceeding this amount may cause adverse reactions.
+                </p>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+
+        {/* Community Section */}
+        <section className="container py-16 text-center">
+          <div className="gradient-bg p-8 rounded-2xl text-white shadow-lg">
+            <h3 className="text-3xl font-bold mb-4">Join Our Community</h3>
+            <p className="text-lg mb-6">
+              Share your supplement combinations and health insights with like-minded people.
+            </p>
+            <Link 
+              href="#" 
+              className="bg-white text-blue-600 px-8 py-3 rounded-full text-lg font-semibold shadow-md hover:bg-gray-100 transition-colors"
+            >
+              Explore Community
+            </Link>
+          </div>
+        </section>
+      </main>
 
       {/* Footer */}
-      <footer className="bg-white">
-        <div className="mx-auto max-w-7xl px-6 py-12 md:flex md:items-center md:justify-between lg:px-8">
-          <div className="flex justify-center space-x-6 md:order-2">
-            <p className="text-xs leading-5 text-gray-500">
-              ⚠️ For educational purposes only. Not medical advice. Consult healthcare providers.
-            </p>
-          </div>
-          <div className="mt-8 md:order-1 md:mt-0">
-            <p className="text-center text-xs leading-5 text-gray-500">
-              &copy; 2024 Nutrition AI Demo. Built for UBC community.
-            </p>
-          </div>
-        </div>
+      <footer className="container py-8 text-center text-text-secondary text-sm">
+        <p>
+          Risk Warning: All information provided on this website is for reference only and cannot replace professional medical advice. 
+          If you have health issues, please consult a doctor or registered nutritionist.
+        </p>
+        <p className="mt-2">&copy; 2024 AI Nutrition Plan. All rights reserved.</p>
       </footer>
     </div>
   );

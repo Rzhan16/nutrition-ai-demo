@@ -9,42 +9,21 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // 🎨 TRUST & VITALITY FUSION COLOR SYSTEM
+        // 🎨 CLEAN PROFESSIONAL COLOR SYSTEM
         
-        // 🤍 Pure Foundation (Pure Encapsulations inspired)
-        pure: {
-          white: 'rgb(var(--pure-white))',
-          light: 'rgb(var(--pure-light))',
-          gray: 'rgb(var(--pure-gray))',
-          border: 'rgb(var(--pure-border))',
-        },
+        // 🤍 Foundation Colors
+        'bg-main': 'rgb(var(--background-main))',
+        'surface-white': 'rgb(var(--surface-white))',
+        'border-light': 'rgb(var(--border-light))',
         
-        // 🎨 Modern Health Tech Colors (Research-Based)
-        vitality: {
-          primary: 'rgb(var(--vitality-primary))', // Modern blue
-          secondary: 'rgb(var(--vitality-secondary))', // Medical green
-          accent: 'rgb(var(--vitality-accent))', // Innovation purple
-        },
+        // 🔵 Vibrant Colors
+        'vibrant-start': 'rgb(var(--vibrant-start))',
+        'vibrant-end': 'rgb(var(--vibrant-end))',
         
-        // 📝 Scientific Typography
-        text: {
-          primary: 'rgb(var(--text-primary))', // Deep authority
-          secondary: 'rgb(var(--text-secondary))', // Readable gray
-          accent: 'rgb(var(--text-accent))', // Cyan highlights
-        },
-        
-        // 🔬 Medical Grade Surfaces
-        surface: {
-          pure: 'rgb(var(--surface-pure))',
-          elevated: 'rgb(var(--surface-elevated))',
-          interactive: 'rgb(var(--surface-interactive))',
-        },
-        
-        // 🎯 Functional Colors
-        success: 'rgb(var(--success-fresh))',
-        warning: 'rgb(var(--warning-energy))',
-        error: 'rgb(var(--error-clinical))',
-        info: 'rgb(var(--info-trust))',
+        // 📝 Typography
+        'text-primary': 'rgb(var(--text-primary))',
+        'text-secondary': 'rgb(var(--text-secondary))',
+        'text-dark': 'rgb(var(--text-dark))',
         
         // Legacy colors for existing components
         health: {
