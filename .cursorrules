@@ -1,0 +1,206 @@
+# AI Nutrition Scanner - Cursor Rules
+
+## Project Context
+You are helping build an AI-powered nutrition supplement scanner and recommendation system.
+Target users: UBC university students, health-conscious individuals
+Tech stack: Next.js 14, TypeScript, Tailwind CSS, OpenAI API, Tesseract.js, Prisma ORM
+
+**Current Status**: Day 1-2 Foundation Complete (Landing page, Analysis interface, Professional UI)
+**Next Phase**: Week 2 - OCR Implementation & Core Features
+
+## Code Standards
+- Use TypeScript with strict mode enabled
+- Follow Next.js 14 app directory structure exclusively
+- Use Tailwind CSS with custom medical-grade design system
+- Implement comprehensive error boundaries and loading states
+- Add detailed JSDoc comments for all exported functions
+- Use semantic naming conventions (healthcare context)
+- Follow React hooks best practices and performance patterns
+
+## Architecture Principles
+- Server Components first, Client Components only when necessary
+- Implement proper data validation with Zod schemas
+- Use React Query/TanStack Query for data fetching and caching
+- Implement SEO optimization with Next.js metadata API
+- Follow WCAG 2.1 AA accessibility guidelines
+- Progressive enhancement for all features
+- Mobile-first responsive design approach
+
+## Health & Legal Compliance Framework
+- **Medical Disclaimers**: Include "This is not medical advice" on all health content
+- **Evidence-Based**: Cite NIH ODS and Health Canada sources
+- **Conservative Claims**: Avoid definitive health statements
+- **Professional Review**: Flag content needing medical review
+- **User Safety**: Implement interaction warnings and contraindications
+- **Privacy First**: Encrypt health data, implement GDPR compliance
+
+## AI Integration Guidelines
+### Prompt Engineering
+- Structure prompts for 8-point analysis format:
+  1. 基本介绍 (Basic Introduction)
+  2. 主要益处 (Primary Benefits)
+  3. 推荐摄入量 (RDA Guidelines)
+  4. 可耐受最高摄入量 (Safety Limits)
+  5. 常见膳食来源 (Dietary Sources)
+  6. 补充剂形式 (Supplement Forms)
+  7. 适合关注的情况 (Usage Scenarios)
+  8. 风险与注意事项 (Risks & Precautions)
+
+### Implementation Standards
+- Include confidence scores with all AI responses
+- Implement aggressive response caching (reduce costs)
+- Add fallback responses for API failures
+- Rate limiting: max 10 requests/minute per user
+- Cost tracking with alerts at $50/day threshold
+- Always include safety disclaimers
+
+## OCR Processing Excellence
+- Optimize images with canvas preprocessing (contrast, brightness)
+- Support formats: JPEG, PNG, WebP (max 10MB)
+- Implement client-side compression before processing
+- Use Tesseract.js with custom supplement recognition patterns
+- Handle confidence scoring below 70% with manual review prompts
+- Implement retry mechanisms for failed OCR attempts
+
+## Database Design Patterns
+- Use Prisma ORM with proper relationships
+- Implement soft deletes for user data
+- Add created_at, updated_at timestamps to all models
+- Use database transactions for data consistency
+- Optimize with proper indexing for search operations
+- Connection pooling for production performance
+
+## UI/UX Medical-Grade Guidelines
+### Design System
+- Primary: Blue tones (#2563eb) for trust and professionalism
+- Health: Green tones (#16a34a) for wellness and nature
+- Accent: Clean grays for medical-grade appearance
+- Typography: Inter font for modern, readable interface
+- Animations: Subtle, professional, accessibility-friendly
+
+### Component Standards
+- Use medical-card class for elevated content areas
+- Implement loading skeletons instead of spinners
+- Progressive disclosure for complex information
+- High contrast ratios (4.5:1 minimum)
+- Touch targets minimum 44px for mobile
+- Keyboard navigation for all interactive elements
+
+## Performance Requirements
+- Core Web Vitals: LCP < 2.5s, FID < 100ms, CLS < 0.1
+- Image optimization with Next.js Image component
+- Dynamic imports for heavy components (OCR, AI libraries)
+- Bundle size monitoring with webpack-bundle-analyzer
+- Service Worker for offline OCR capability
+- React.memo for expensive rendering operations
+
+## Testing Framework
+### Required Tests
+- Unit tests for utility functions (Jest)
+- Integration tests for API routes (Supertest)
+- E2E tests for critical user flows (Playwright)
+- OCR accuracy tests with real supplement images
+- AI prompt consistency and quality validation
+- Accessibility testing with axe-core
+
+### Quality Gates
+- 90%+ OCR accuracy on clear supplement labels
+- Sub-3 second response time for AI analysis
+- 95%+ accessibility score
+- Zero TypeScript errors in production builds
+
+## Error Handling Strategy
+- Implement comprehensive error boundaries
+- Graceful degradation for OCR/AI failures
+- User-friendly error messages with recovery suggestions
+- Detailed error logging for debugging (avoid PII)
+- Retry mechanisms with exponential backoff
+- Offline functionality for core features
+
+## File Naming & Organization Conventions
+### Components
+- PascalCase: `SupplementAnalysis.tsx`, `OCRProcessor.tsx`
+- Group by feature: `/components/ocr/`, `/components/analysis/`
+- Co-locate styles and tests with components
+
+### Utilities & Services
+- camelCase: `extractIngredients.ts`, `analyzeNutrition.ts`
+- Organize by domain: `/lib/ocr/`, `/lib/ai/`, `/lib/health/`
+
+### API Routes
+- kebab-case: `supplement-analysis.ts`, `ocr-processing.ts`
+- RESTful patterns: GET, POST, PUT, DELETE
+- Proper HTTP status codes and error responses
+
+## Security Implementation
+### Data Protection
+- Encrypt health data at rest using AES-256
+- Use HTTPS everywhere with proper headers
+- Implement CSRF protection for forms
+- Sanitize all user inputs with DOMPurify
+- Rate limiting on sensitive endpoints
+- Audit logging for health data access
+
+### Privacy Controls
+- Granular privacy settings for users
+- Data export functionality (GDPR Article 20)
+- Right to deletion implementation
+- Consent management for data processing
+- Anonymous analytics (no PII tracking)
+
+## When Suggesting Code
+### Always Include
+1. **Proper TypeScript types** with strict null checks
+2. **Error handling** with user-friendly messages
+3. **Loading states** with accessibility attributes
+4. **JSDoc comments** for complex functions
+5. **Performance considerations** and optimizations
+6. **Mobile-first responsive** implementation
+7. **Accessibility attributes** (ARIA labels, roles)
+8. **Input validation** with Zod schemas
+
+### Code Quality Checklist
+- [ ] TypeScript strict mode compliance
+- [ ] Error boundary implementation
+- [ ] Loading and empty states
+- [ ] Mobile responsiveness verified
+- [ ] Accessibility attributes added
+- [ ] Performance optimizations applied
+- [ ] Medical disclaimers included where relevant
+- [ ] Input validation implemented
+
+## UBC-Specific Considerations
+- University network compatibility
+- Student budget consciousness
+- Academic calendar integration potential
+- Campus health services integration planning
+- Multi-cultural dietary considerations
+- Accessibility for diverse student population
+
+## Development Workflow
+### Git Standards
+- Feature branches: `feature/ocr-implementation`
+- Commit messages: `feat: add OCR processing pipeline`
+- PR reviews: Require medical accuracy review
+- Protected main branch with required checks
+
+### Deployment Pipeline
+- Staging environment for testing
+- Environment-specific configurations
+- Database migration automation
+- Performance monitoring in production
+- Feature flags for gradual rollouts
+
+## Future-Proofing Considerations
+- Modular architecture for easy feature additions
+- API versioning strategy
+- Internationalization preparation (i18n)
+- Scalability planning for user growth
+- Integration readiness for healthcare APIs
+- Machine learning model integration planning
+
+---
+
+**Priority Focus**: User safety, data privacy, and evidence-based health recommendations
+**Quality Standard**: Medical-grade accuracy and professional presentation
+**Success Metric**: Empowering informed health decisions for UBC community 
