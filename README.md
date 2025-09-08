@@ -4,14 +4,14 @@ A professional AI-powered nutrition supplement analysis application built with N
 
 ## 🚀 Live Demo
 
-**[🌟 VIEW LIVE DEMO](https://nutrition-ai-demo-huxdy4fol-raymonds-projects-b281a579.vercel.app)** 
+**[🌟 VIEW LIVE DEMO](https://nutrition-ai-demo-6xkt9w2mm-raymonds-projects-b281a579.vercel.app)** 
 
-Experience the stunning Trust & Vitality Fusion design with:
-- ✨ Bilingual hero with gradient text (智能营养 AI Analysis)
-- ⚡ Dynamic 3D gradient icons with glow effects
-- 🎯 Vitality cards with bounce animations
-- 🔬 Medical-grade Pure Encapsulations aesthetic
-- 📱 Mobile-optimized Sports Research energy
+Experience the clean, professional design with:
+- ✨ Clean hero with professional typography
+- ⚡ Simple, vibrant gradient buttons and icons
+- 🎯 Card-based layout with subtle shadows
+- 🔬 Medical disclaimers and professional content
+- 📱 Mobile-first responsive design
 
 Local development:
 ```bash
