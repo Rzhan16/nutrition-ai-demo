@@ -9,16 +9,16 @@
   --pure-gray: 248 249 250; /* Clean neutral background */
   --pure-border: 240 241 243; /* Minimal borders */
   
-  /* ⚡ Vitality Accents - Dynamic Energy */
-  --vitality-primary: 6 182 212; /* Energetic cyan #06B6D4 */
-  --vitality-green: 34 197 94; /* Fresh lime green #22C55E */
-  --vitality-orange: 249 115 22; /* Vibrant orange #F97316 */
-  --vitality-gradient: linear-gradient(135deg, rgb(6 182 212) 0%, rgb(34 197 94) 100%);
+  /* 🎨 Modern Health Tech Palette - Research-Based */
+  --vitality-primary: 59 130 246; /* Modern blue #3B82F6 */
+  --vitality-secondary: 16 185 129; /* Medical green #10B981 */
+  --vitality-accent: 139 92 246; /* Innovation purple #8B5CF6 */
+  --vitality-gradient: linear-gradient(135deg, rgb(59 130 246) 0%, rgb(16 185 129) 100%);
   
   /* 📝 Scientific Typography */
   --text-primary: 15 23 42; /* Deep charcoal for authority */
   --text-secondary: 71 85 105; /* Medium gray for readability */
-  --text-accent: 6 182 212; /* Cyan for highlights */
+  --text-accent: 59 130 246; /* Modern blue for highlights */
   
   /* 🔬 Medical Grade Surfaces */
   --surface-pure: 255 255 255; /* Clean white cards */
@@ -26,10 +26,10 @@
   --surface-interactive: 248 250 252; /* Hover states */
   
   /* 🎯 Functional Colors */
-  --success-fresh: 34 197 94; /* Fresh green success */
-  --warning-energy: 249 115 22; /* Orange attention */
+  --success-fresh: 16 185 129; /* Medical green success */
+  --warning-energy: 245 158 11; /* Professional amber */
   --error-clinical: 239 68 68; /* Clinical red */
-  --info-trust: 6 182 212; /* Trust blue */
+  --info-trust: 59 130 246; /* Modern blue */
   
   /* Legacy mappings for existing components */
   --background: 249 250 251; /* Light background */
@@ -55,10 +55,10 @@
   
   /* 🎨 PREMIUM DESIGN ELEMENTS */
   
-  /* ✨ Vitality Gradients */
-  --gradient-energy: linear-gradient(135deg, rgb(6 182 212) 0%, rgb(34 197 94) 100%);
-  --gradient-trust: linear-gradient(135deg, rgb(6 182 212) 0%, rgb(15 23 42) 100%);
-  --gradient-wellness: linear-gradient(135deg, rgb(34 197 94) 0%, rgb(249 115 22) 100%);
+  /* ✨ Modern Health Gradients */
+  --gradient-energy: linear-gradient(135deg, rgb(59 130 246) 0%, rgb(16 185 129) 100%);
+  --gradient-trust: linear-gradient(135deg, rgb(59 130 246) 0%, rgb(139 92 246) 100%);
+  --gradient-wellness: linear-gradient(135deg, rgb(16 185 129) 0%, rgb(59 130 246) 100%);
   
   /* 📏 Sophisticated Spacing */
   --spacing-xs: 0.25rem; /* 4px */

@@ -19,11 +19,11 @@ const config: Config = {
           border: 'rgb(var(--pure-border))',
         },
         
-        // ⚡ Vitality Accents (Sports Research inspired)
+        // 🎨 Modern Health Tech Colors (Research-Based)
         vitality: {
-          primary: 'rgb(var(--vitality-primary))', // Energetic cyan
-          green: 'rgb(var(--vitality-green))', // Fresh lime
-          orange: 'rgb(var(--vitality-orange))', // Vibrant orange
+          primary: 'rgb(var(--vitality-primary))', // Modern blue
+          secondary: 'rgb(var(--vitality-secondary))', // Medical green
+          accent: 'rgb(var(--vitality-accent))', // Innovation purple
         },
         
         // 📝 Scientific Typography

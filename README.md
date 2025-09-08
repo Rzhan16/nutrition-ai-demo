@@ -21,7 +21,7 @@ npm run dev
 
 ## 🎯 Project Overview
 
-This demo application showcases an AI-powered nutrition analysis platform designed for the UBC community and health-conscious individuals. It provides instant supplement analysis through OCR scanning and database search, delivering professional-grade nutritional insights.
+This demo application showcases an AI-powered nutrition analysis platform designed for health-conscious individuals and fitness enthusiasts. It provides instant supplement analysis through OCR scanning and database search, delivering professional-grade nutritional insights.
 
 ### Key Features
 
@@ -246,9 +246,9 @@ npm run type-check   # Run TypeScript checks
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🎓 Built for UBC Community
+## 🎓 Built for Health & Wellness
 
-This project was created as a demonstration for the UBC community, focusing on student health and wellness needs. It showcases modern web development practices and AI integration for health technology applications.
+This project showcases modern web development practices and AI integration for health technology applications, focusing on evidence-based nutrition guidance and professional supplement analysis.
 
 ## 📞 Support
 

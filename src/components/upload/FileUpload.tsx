@@ -226,18 +226,18 @@ export function FileUpload({
         {!selectedFile ? (
           /* Upload prompt */
           <div className="space-y-4">
-            <div className="relative mx-auto flex items-center justify-center h-24 w-24 rounded-3xl bg-gradient-to-br from-vitality-primary to-vitality-green mb-6 shadow-lg">
+            <div className="relative mx-auto flex items-center justify-center h-24 w-24 rounded-3xl bg-gradient-to-br from-vitality-primary to-vitality-secondary mb-6 shadow-lg">
               <Upload className="h-12 w-12 text-white" aria-hidden="true" />
-              <div className="absolute -inset-2 bg-gradient-to-br from-vitality-primary to-vitality-green rounded-3xl blur opacity-20"></div>
+              <div className="absolute -inset-2 bg-gradient-to-br from-vitality-primary to-vitality-secondary rounded-3xl blur opacity-20"></div>
             </div>
             
             <div>
               <h3 className="text-2xl font-bold text-text-primary mb-4">
-                📱 上传营养标签
-                <span className="block text-sm font-medium text-text-accent mt-1">Upload Supplement Label</span>
+                📱 Upload Supplement Label
+                <span className="block text-sm font-medium text-text-accent mt-1">Smart Image Recognition</span>
               </h3>
               <p className="text-text-secondary mb-6 text-lg">
-                拖拽或点击上传营养补充剂照片，AI智能识别成分
+                Drag and drop or click to upload supplement photos for AI ingredient recognition
               </p>
               
               <div 
@@ -246,15 +246,15 @@ export function FileUpload({
               >
                 <p className="flex items-center gap-2">
                   <span className="w-2 h-2 bg-success rounded-full"></span>
-                  支持格式: {acceptedTypes.join(', ').toUpperCase()}
+                  Supported formats: {acceptedTypes.join(', ').toUpperCase()}
                 </p>
                 <p className="flex items-center gap-2">
                   <span className="w-2 h-2 bg-info rounded-full"></span>
-                  最大文件: {formatFileSize(maxSize)}
+                  Maximum file size: {formatFileSize(maxSize)}
                 </p>
                 <p className="flex items-center gap-2">
                   <span className="w-2 h-2 bg-warning rounded-full"></span>
-                  建议拍摄清晰、光线充足的标签照片
+                  Best results: Clear, well-lit label photos
                 </p>
               </div>
             </div>

@@ -16,35 +16,35 @@ export default function AnalyzePage() {
         
         <div className="relative mx-auto max-w-5xl text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-surface-elevated border border-pure-border rounded-full mb-8">
-            <div className="w-2 h-2 bg-vitality-green rounded-full animate-pulse"></div>
+            <div className="w-2 h-2 bg-vitality-secondary rounded-full animate-pulse"></div>
             <span className="text-sm font-medium text-text-secondary">AI-Powered • Scientific • Trusted</span>
           </div>
           
           <h1 className="text-5xl font-bold tracking-tight text-text-primary sm:text-6xl lg:text-7xl">
-            <span className="block">智能营养</span>
-            <span className="block bg-gradient-to-r from-vitality-primary via-vitality-green to-vitality-orange bg-clip-text text-transparent">
-              AI Analysis
+            <span className="block">AI-Powered</span>
+            <span className="block bg-gradient-to-r from-vitality-primary via-vitality-secondary to-vitality-accent bg-clip-text text-transparent">
+              Nutrition Analysis
             </span>
           </h1>
           
           <p className="mt-8 text-xl leading-relaxed text-text-secondary max-w-3xl mx-auto">
-            专业AI扫描营养补充剂标签，获得科学数据支持的个性化健康建议。
-            <span className="block mt-2 text-text-accent font-medium">为UBC社区打造的可信赖营养分析平台</span>
+            Professional AI scanning of supplement labels with personalized health insights backed by scientific data.
+            <span className="block mt-2 text-text-accent font-medium">Your trusted nutrition analysis platform</span>
           </p>
           
           {/* Trust Indicators */}
           <div className="mt-10 flex items-center justify-center gap-8 text-sm text-text-secondary">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 bg-success rounded-full"></div>
-              <span>科学验证</span>
+              <span>Evidence-Based</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 bg-info rounded-full"></div>
-              <span>隐私保护</span>
+              <span>Privacy Protected</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 bg-warning rounded-full"></div>
-              <span>即时分析</span>
+              <span>Instant Results</span>
             </div>
           </div>
         </div>
@@ -55,22 +55,22 @@ export default function AnalyzePage() {
         <div className="mx-auto max-w-6xl">
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
             
-            {/* 📱 Upload Section - Sports Research Style */}
+            {/* 📱 Upload Section - Modern Health Tech Style */}
             <div className="medical-card p-10 group">
               <div className="text-center">
-                <div className="relative mx-auto flex items-center justify-center h-20 w-20 rounded-2xl bg-gradient-to-br from-vitality-primary to-vitality-green mb-8 group-hover:scale-110 transition-all duration-500">
+                <div className="relative mx-auto flex items-center justify-center h-20 w-20 rounded-2xl bg-gradient-to-br from-vitality-primary to-vitality-secondary mb-8 group-hover:scale-110 transition-all duration-500">
                   <Upload className="h-10 w-10 text-white" />
-                  <div className="absolute -inset-1 bg-gradient-to-br from-vitality-primary to-vitality-green rounded-2xl blur opacity-30 group-hover:opacity-50 transition-opacity"></div>
+                  <div className="absolute -inset-1 bg-gradient-to-br from-vitality-primary to-vitality-secondary rounded-2xl blur opacity-30 group-hover:opacity-50 transition-opacity"></div>
                 </div>
                 
                 <h2 className="text-3xl font-bold text-text-primary mb-4">
-                  📸 智能扫描
-                  <span className="block text-lg font-medium text-text-accent mt-2">Intelligent Scanning</span>
+                  📸 Smart Scanning
+                  <span className="block text-lg font-medium text-text-accent mt-2">AI-Powered OCR Technology</span>
                 </h2>
                 
                 <p className="text-text-secondary mb-8 text-lg leading-relaxed">
-                  上传营养补充剂标签照片，AI瞬间识别成分并生成专业分析报告
-                  <span className="block mt-2 text-sm text-text-accent">Professional OCR + GPT-4 Analysis</span>
+                  Upload supplement label photos for instant AI ingredient recognition and professional analysis reports
+                  <span className="block mt-2 text-sm text-text-accent">Advanced OCR + GPT-4 Analysis</span>
                 </p>
                 
                 {/* Upload Component */}
@@ -85,21 +85,21 @@ export default function AnalyzePage() {
               </div>
             </div>
 
-            {/* 🔍 Search Section - Pure Encapsulations Style */}
+            {/* 🔍 Search Section - Professional Database Style */}
             <div className="medical-card p-10 group">
               <div className="text-center">
-                <div className="relative mx-auto flex items-center justify-center h-20 w-20 rounded-2xl bg-gradient-to-br from-vitality-green to-vitality-orange mb-8 group-hover:scale-110 transition-all duration-500">
+                <div className="relative mx-auto flex items-center justify-center h-20 w-20 rounded-2xl bg-gradient-to-br from-vitality-secondary to-vitality-accent mb-8 group-hover:scale-110 transition-all duration-500">
                   <Search className="h-10 w-10 text-white" />
-                  <div className="absolute -inset-1 bg-gradient-to-br from-vitality-green to-vitality-orange rounded-2xl blur opacity-30 group-hover:opacity-50 transition-opacity"></div>
+                  <div className="absolute -inset-1 bg-gradient-to-br from-vitality-secondary to-vitality-accent rounded-2xl blur opacity-30 group-hover:opacity-50 transition-opacity"></div>
                 </div>
                 
                 <h2 className="text-3xl font-bold text-text-primary mb-4">
-                  🔍 智能搜索
-                  <span className="block text-lg font-medium text-text-accent mt-2">Smart Database</span>
+                  🔍 Smart Database
+                  <span className="block text-lg font-medium text-text-accent mt-2">Comprehensive Search Engine</span>
                 </h2>
                 
                 <p className="text-text-secondary mb-8 text-lg leading-relaxed">
-                  搜索权威营养品数据库，获得基于科学研究的专业建议
+                  Search our authoritative nutrition database for science-backed professional recommendations
                   <span className="block mt-2 text-sm text-text-accent">Trusted Brands • Evidence-Based Data</span>
                 </p>
                 
@@ -117,27 +117,27 @@ export default function AnalyzePage() {
             </div>
           </div>
 
-          {/* ⚡ Vitality Features Bar */}
+          {/* ⚡ Modern Features Bar */}
           <div className="mt-16 grid grid-cols-1 gap-6 sm:grid-cols-3">
             <div className="vitality-card p-6 text-center group cursor-pointer">
               <Zap className="h-8 w-8 mx-auto mb-4 group-hover:scale-125 transition-transform duration-300" />
-              <div className="font-bold text-lg">⚡ 即时分析</div>
-              <div className="text-sm opacity-90 mt-1">Instant Results</div>
-              <div className="text-xs opacity-75 mt-2">3秒内完成专业分析</div>
+              <div className="font-bold text-lg">⚡ Instant Analysis</div>
+              <div className="text-sm opacity-90 mt-1">Lightning Fast</div>
+              <div className="text-xs opacity-75 mt-2">Professional analysis in 3 seconds</div>
             </div>
             
             <div className="vitality-card p-6 text-center group cursor-pointer" style={{ background: 'var(--gradient-trust)' }}>
               <Brain className="h-8 w-8 mx-auto mb-4 group-hover:scale-125 transition-transform duration-300" />
-              <div className="font-bold text-lg">🧠 AI智能</div>
+              <div className="font-bold text-lg">🧠 AI Intelligence</div>
               <div className="text-sm opacity-90 mt-1">GPT-4 Powered</div>
-              <div className="text-xs opacity-75 mt-2">最先进的AI分析引擎</div>
+              <div className="text-xs opacity-75 mt-2">Advanced AI analysis engine</div>
             </div>
             
             <div className="vitality-card p-6 text-center group cursor-pointer" style={{ background: 'var(--gradient-wellness)' }}>
               <Shield className="h-8 w-8 mx-auto mb-4 group-hover:scale-125 transition-transform duration-300" />
-              <div className="font-bold text-lg">🛡️ 科学权威</div>
+              <div className="font-bold text-lg">🛡️ Scientific Authority</div>
               <div className="text-sm opacity-90 mt-1">Evidence-Based</div>
-              <div className="text-xs opacity-75 mt-2">基于NIH与Health Canada数据</div>
+              <div className="text-xs opacity-75 mt-2">Based on NIH & Health Canada data</div>
             </div>
           </div>
 

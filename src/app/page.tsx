@@ -15,7 +15,7 @@ export default function HomePage() {
             <p className="mt-6 text-lg leading-8 text-text-light max-w-3xl mx-auto">
               Scan supplement labels instantly, get AI-powered nutritional analysis, 
               and make informed decisions about your health supplements. 
-              Built for the UBC community and health-conscious individuals.
+              Built for health-conscious individuals seeking professional guidance.
             </p>
             <div className="mt-10 flex items-center justify-center gap-x-6">
               <Link
