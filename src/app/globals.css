@@ -1,25 +1,35 @@
 @import "tailwindcss";
 
 :root {
-  /* Professional & Accessible Palette */
+  /* 🎨 TRUST & VITALITY FUSION DESIGN SYSTEM */
   
-  /* Primary/Accent Colors */
-  --primary-50: 239 246 255; /* #EFF6FF */
-  --primary-100: 219 234 254; /* #DBEAFE */
-  --primary-600: 37 99 235; /* #2563EB */
+  /* 🤍 Pure Foundation - Scientific Trust */
+  --pure-white: 255 255 255; /* Pure laboratory white */
+  --pure-light: 252 252 253; /* Subtle off-white */
+  --pure-gray: 248 249 250; /* Clean neutral background */
+  --pure-border: 240 241 243; /* Minimal borders */
   
-  /* Text Colors */
-  --text-dark: 31 41 55; /* #1F2937 */
-  --text-light: 107 114 128; /* #6B7280 */
+  /* ⚡ Vitality Accents - Dynamic Energy */
+  --vitality-primary: 6 182 212; /* Energetic cyan #06B6D4 */
+  --vitality-green: 34 197 94; /* Fresh lime green #22C55E */
+  --vitality-orange: 249 115 22; /* Vibrant orange #F97316 */
+  --vitality-gradient: linear-gradient(135deg, rgb(6 182 212) 0%, rgb(34 197 94) 100%);
   
-  /* Background Colors */
-  --background-card: 255 255 255; /* #FFFFFF */
-  --background-section: 249 250 251; /* #F9FAFB */
+  /* 📝 Scientific Typography */
+  --text-primary: 15 23 42; /* Deep charcoal for authority */
+  --text-secondary: 71 85 105; /* Medium gray for readability */
+  --text-accent: 6 182 212; /* Cyan for highlights */
   
-  /* Status & Feedback Colors */
-  --status-success: 16 185 129; /* #10B981 */
-  --status-error: 239 68 68; /* #EF4444 */
-  --status-warning: 245 158 11; /* #F59E0B */
+  /* 🔬 Medical Grade Surfaces */
+  --surface-pure: 255 255 255; /* Clean white cards */
+  --surface-elevated: 252 252 253; /* Subtle elevation */
+  --surface-interactive: 248 250 252; /* Hover states */
+  
+  /* 🎯 Functional Colors */
+  --success-fresh: 34 197 94; /* Fresh green success */
+  --warning-energy: 249 115 22; /* Orange attention */
+  --error-clinical: 239 68 68; /* Clinical red */
+  --info-trust: 6 182 212; /* Trust blue */
   
   /* Legacy mappings for existing components */
   --background: 249 250 251; /* Light background */
@@ -43,19 +53,33 @@
   --ring: 37 99 235;
   --radius: 0.5rem;
   
-  /* Medical grade spacing */
-  --spacing-xs: 0.25rem;
-  --spacing-sm: 0.5rem;
-  --spacing-md: 1rem;
-  --spacing-lg: 1.5rem;
-  --spacing-xl: 2rem;
-  --spacing-2xl: 3rem;
+  /* 🎨 PREMIUM DESIGN ELEMENTS */
   
-  /* Professional shadows */
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  /* ✨ Vitality Gradients */
+  --gradient-energy: linear-gradient(135deg, rgb(6 182 212) 0%, rgb(34 197 94) 100%);
+  --gradient-trust: linear-gradient(135deg, rgb(6 182 212) 0%, rgb(15 23 42) 100%);
+  --gradient-wellness: linear-gradient(135deg, rgb(34 197 94) 0%, rgb(249 115 22) 100%);
+  
+  /* 📏 Sophisticated Spacing */
+  --spacing-xs: 0.25rem; /* 4px */
+  --spacing-sm: 0.5rem; /* 8px */
+  --spacing-md: 1rem; /* 16px */
+  --spacing-lg: 1.5rem; /* 24px */
+  --spacing-xl: 2rem; /* 32px */
+  --spacing-2xl: 3rem; /* 48px */
+  --spacing-3xl: 4rem; /* 64px */
+  
+  /* 🌟 Elegant Shadows */
+  --shadow-pure: 0 1px 3px 0 rgb(0 0 0 / 0.03), 0 1px 2px 0 rgb(0 0 0 / 0.02);
+  --shadow-elevated: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -1px rgb(0 0 0 / 0.03);
+  --shadow-premium: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -2px rgb(0 0 0 / 0.03);
+  --shadow-dramatic: 0 25px 50px -12px rgb(0 0 0 / 0.15);
+  --shadow-vitality: 0 8px 25px -8px rgb(6 182 212 / 0.3);
+  
+  /* 🔄 Smooth Animations */
+  --transition-smooth: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+  --transition-bounce: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --transition-fast: all 0.15s ease-out;
 }
 
 @theme inline {
@@ -269,17 +293,52 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
+/* 🏥 Medical-Grade Components */
 .medical-card {
-  background: hsl(var(--card));
-  border: 1px solid hsl(var(--border));
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-md);
-  transition: all 0.2s ease-in-out;
+  background: rgb(var(--surface-pure));
+  border: 1px solid rgb(var(--pure-border));
+  border-radius: 16px;
+  box-shadow: var(--shadow-pure);
+  transition: var(--transition-smooth);
+  position: relative;
+  overflow: hidden;
 }
 
 .medical-card:hover {
-  box-shadow: var(--shadow-lg);
-  transform: translateY(-2px);
+  box-shadow: var(--shadow-premium);
+  transform: translateY(-4px);
+  border-color: rgb(var(--vitality-primary) / 0.2);
+}
+
+.medical-card:before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--gradient-energy);
+  opacity: 0;
+  transition: var(--transition-smooth);
+}
+
+.medical-card:hover:before {
+  opacity: 1;
+}
+
+/* ⚡ Vitality Action Cards */
+.vitality-card {
+  background: var(--gradient-energy);
+  border: none;
+  border-radius: 20px;
+  box-shadow: var(--shadow-vitality);
+  transition: var(--transition-bounce);
+  color: white;
+}
+
+.vitality-card:hover {
+  transform: translateY(-6px) scale(1.02);
+  box-shadow: var(--shadow-dramatic);
 }
 
 /* Professional button styles */

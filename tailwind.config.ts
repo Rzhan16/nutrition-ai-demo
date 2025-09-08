@@ -9,25 +9,42 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Professional & Accessible Color System
-        primary: {
-          50: 'rgb(var(--primary-50))', // #EFF6FF
-          100: 'rgb(var(--primary-100))', // #DBEAFE
-          600: 'rgb(var(--primary-600))', // #2563EB
+        // 🎨 TRUST & VITALITY FUSION COLOR SYSTEM
+        
+        // 🤍 Pure Foundation (Pure Encapsulations inspired)
+        pure: {
+          white: 'rgb(var(--pure-white))',
+          light: 'rgb(var(--pure-light))',
+          gray: 'rgb(var(--pure-gray))',
+          border: 'rgb(var(--pure-border))',
         },
         
-        // Text colors with high contrast
-        'text-dark': 'rgb(var(--text-dark))', // #1F2937
-        'text-light': 'rgb(var(--text-light))', // #6B7280
+        // ⚡ Vitality Accents (Sports Research inspired)
+        vitality: {
+          primary: 'rgb(var(--vitality-primary))', // Energetic cyan
+          green: 'rgb(var(--vitality-green))', // Fresh lime
+          orange: 'rgb(var(--vitality-orange))', // Vibrant orange
+        },
         
-        // Background colors
-        'bg-card': 'rgb(var(--background-card))', // #FFFFFF
-        'bg-section': 'rgb(var(--background-section))', // #F9FAFB
+        // 📝 Scientific Typography
+        text: {
+          primary: 'rgb(var(--text-primary))', // Deep authority
+          secondary: 'rgb(var(--text-secondary))', // Readable gray
+          accent: 'rgb(var(--text-accent))', // Cyan highlights
+        },
         
-        // Status colors
-        'status-success': 'rgb(var(--status-success))', // #10B981
-        'status-error': 'rgb(var(--status-error))', // #EF4444
-        'status-warning': 'rgb(var(--status-warning))', // #F59E0B
+        // 🔬 Medical Grade Surfaces
+        surface: {
+          pure: 'rgb(var(--surface-pure))',
+          elevated: 'rgb(var(--surface-elevated))',
+          interactive: 'rgb(var(--surface-interactive))',
+        },
+        
+        // 🎯 Functional Colors
+        success: 'rgb(var(--success-fresh))',
+        warning: 'rgb(var(--warning-energy))',
+        error: 'rgb(var(--error-clinical))',
+        info: 'rgb(var(--info-trust))',
         
         // Legacy colors for existing components
         health: {
