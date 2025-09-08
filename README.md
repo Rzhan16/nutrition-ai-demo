@@ -4,7 +4,7 @@ A professional AI-powered nutrition supplement analysis application built with N
 
 ## 🚀 Live Demo
 
-**[🌟 VIEW LIVE DEMO](https://nutrition-ai-demo-7ht03ab6i-raymonds-projects-b281a579.vercel.app)** 
+**[🌟 VIEW LIVE DEMO](https://nutrition-ai-demo-huxdy4fol-raymonds-projects-b281a579.vercel.app)** 
 
 Experience the stunning Trust & Vitality Fusion design with:
 - ✨ Bilingual hero with gradient text (智能营养 AI Analysis)
