@@ -1,4 +1,8 @@
+'use client';
+
 import { Upload, Search, Zap, Shield, Brain } from 'lucide-react';
+import { FileUpload } from '@/components/upload/FileUpload';
+import { SearchBox } from '@/components/search/SearchBox';
 
 export default function AnalyzePage() {
   return (
@@ -34,28 +38,15 @@ export default function AnalyzePage() {
                   Take a photo or upload an image of your supplement label for instant OCR scanning and analysis.
                 </p>
                 
-                {/* Upload Area */}
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors cursor-pointer bg-gray-50">
-                  <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                  <div className="text-lg font-medium text-gray-900 mb-2">
-                    Click to upload or drag and drop
-                  </div>
-                  <div className="text-sm text-gray-500">
-                    PNG, JPG, WebP up to 10MB
-                  </div>
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept="image/*"
-                    aria-label="Upload supplement image"
-                  />
-                </div>
-
-                <div className="mt-6">
-                  <button className="btn-primary w-full">
-                    Start OCR Analysis
-                  </button>
-                </div>
+                {/* Upload Component */}
+                <FileUpload
+                  onUpload={(file) => {
+                    console.log('File uploaded:', file.name);
+                    // TODO: Implement OCR processing in Week 2
+                  }}
+                  maxSize={10 * 1024 * 1024} // 10MB
+                  acceptedTypes={['.jpg', '.jpeg', '.png', '.webp']}
+                />
               </div>
             </div>
 
@@ -72,36 +63,16 @@ export default function AnalyzePage() {
                   Search our database of popular supplements from trusted brands for instant analysis.
                 </p>
                 
-                {/* Search Box */}
-                <div className="relative mb-6">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search supplements, brands, or ingredients..."
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-
-                {/* Popular Suggestions */}
-                <div className="text-left mb-6">
-                  <p className="text-sm font-medium text-gray-700 mb-3">Popular searches:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {['Vitamin D3', 'Magnesium', 'Omega-3', 'B12', 'Multivitamin', 'Probiotics'].map((suggestion) => (
-                      <span
-                        key={suggestion}
-                        className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm cursor-pointer hover:bg-gray-200 transition-colors"
-                      >
-                        {suggestion}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mt-6">
-                  <button className="btn-primary w-full">
-                    Search Database
-                  </button>
-                </div>
+                {/* Search Component */}
+                <SearchBox
+                  onSearch={(query) => {
+                    console.log('Searching for:', query);
+                    // TODO: Implement database search in Week 2
+                  }}
+                  suggestions={['Vitamin D3', 'Magnesium', 'Omega-3', 'Vitamin B12', 'Multivitamin', 'Probiotics']}
+                  placeholder="Search supplements, brands, or ingredients..."
+                  autoFocus={false}
+                />
               </div>
             </div>
           </div>
