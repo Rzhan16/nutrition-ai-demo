@@ -58,7 +58,7 @@ export function FileUpload({
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
-  const fileId = useRef(`file-upload-${Math.random().toString(36).substr(2, 9)}`);
+  const fileId = React.useId();
 
   /**
    * Validates file against size and type constraints
@@ -203,7 +203,7 @@ export function FileUpload({
         role="button"
         tabIndex={disabled ? -1 : 0}
         aria-label="Upload supplement image file"
-        aria-describedby={`${fileId.current}-description`}
+        aria-describedby={`${fileId}-description`}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
@@ -214,13 +214,13 @@ export function FileUpload({
         {/* Hidden file input */}
         <input
           ref={inputRef}
-          id={fileId.current}
+          id={fileId}
           type="file"
           accept={acceptedTypes.join(',')}
           onChange={handleFileSelect}
           className="sr-only"
           disabled={disabled}
-          aria-describedby={`${fileId.current}-description`}
+          aria-describedby={`${fileId}-description`}
         />
 
         {!selectedFile ? (
@@ -231,16 +231,16 @@ export function FileUpload({
             </div>
             
             <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
+              <h3 className="text-lg font-medium text-white mb-2">
                 Upload Supplement Label
               </h3>
-              <p className="text-gray-600 mb-4">
+              <p className="text-gray-200 mb-4">
                 Drag and drop your supplement image here, or click to browse
               </p>
               
               <div 
-                id={`${fileId.current}-description`}
-                className="text-sm text-gray-500 space-y-1"
+                id={`${fileId}-description`}
+                className="text-sm text-gray-300 space-y-1"
               >
                 <p>Supported formats: {acceptedTypes.join(', ').toUpperCase()}</p>
                 <p>Maximum size: {formatFileSize(maxSize)}</p>

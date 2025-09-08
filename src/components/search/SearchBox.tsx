@@ -71,7 +71,7 @@ export function SearchBox({
 
   const inputRef = useRef<HTMLInputElement>(null);
   const listboxRef = useRef<HTMLDivElement>(null);
-  const searchId = useRef(`search-${Math.random().toString(36).substr(2, 9)}`);
+  const searchId = React.useId();
 
   // Popular supplements for trending suggestions
   const trendingSuggestions: SearchSuggestion[] = [
@@ -309,7 +309,7 @@ export function SearchBox({
         
         <input
           ref={inputRef}
-          id={searchId.current}
+          id={searchId}
           type="text"
           value={query}
           onChange={handleInputChange}
@@ -331,7 +331,7 @@ export function SearchBox({
           aria-haspopup="listbox"
           aria-activedescendant={
             activeSuggestionIndex >= 0 
-              ? `${searchId.current}-option-${activeSuggestionIndex}`
+              ? `${searchId}-option-${activeSuggestionIndex}`
               : undefined
           }
           role="combobox"
@@ -372,7 +372,7 @@ export function SearchBox({
               {filteredSuggestions.map((suggestion, index) => (
                 <button
                   key={suggestion.id}
-                  id={`${searchId.current}-option-${index}`}
+                  id={`${searchId}-option-${index}`}
                   onClick={() => handleSuggestionClick(suggestion)}
                   className={cn(
                     'w-full px-3 py-3 text-left flex items-center space-x-3',
