@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState, useCallback, useRef } from 'react';
-import { Upload, X, RotateCw, ZoomIn, ZoomOut, CheckCircle, AlertTriangle } from 'lucide-react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { Upload, X, RotateCw, ZoomIn, ZoomOut, CheckCircle, AlertTriangle, Crop, Loader2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import * as Progress from '@radix-ui/react-progress';
 import { cn, formatFileSize, isValidFileType } from '@/lib/utils';
 
 /**
