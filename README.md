@@ -4,14 +4,17 @@ A professional AI-powered nutrition supplement analysis application built with N
 
 ## 🚀 Live Demo
 
-**[🌟 VIEW LIVE DEMO](https://nutrition-ai-demo-6xkt9w2mm-raymonds-projects-b281a579.vercel.app)** 
+**[🌟 VIEW LIVE DEMO](https://nutrition-ai-demo-qonxcrwvz-raymonds-projects-b281a579.vercel.app)** 
 
-Experience the clean, professional design with:
-- ✨ Clean hero with professional typography
-- ⚡ Simple, vibrant gradient buttons and icons
-- 🎯 Card-based layout with subtle shadows
-- 🔬 Medical disclaimers and professional content
-- 📱 Mobile-first responsive design
+Experience the complete UI component library with:
+- 🏗️ **Professional Layout Components** (Header, Footer, Sidebar)
+- 📊 **Advanced Loading States** (Skeleton components for all sections)
+- 🧬 **Nutrient Analysis Display** (Progress bars, safety levels, interactions)
+- ⚠️ **Warning System** (4 severity levels, emergency contacts)
+- 📚 **Academic References** (Credibility scores, citation standards)
+- 🎨 **Framer Motion Animations** (Smooth transitions throughout)
+- ♿ **Full Accessibility** (ARIA labels, keyboard navigation)
+- 📱 **Mobile-First Design** (Touch-friendly, responsive)
 
 Local development:
 ```bash
