@@ -3,6 +3,7 @@ import { withErrorHandling, createSuccessResponse } from '@/lib/error-handler'
 import { withRateLimit, RateLimitConfigs, getRateLimitHeaders } from '@/lib/rate-limiter'
 import { searchSchema } from '@/lib/validations'
 import { prisma } from '@/lib/db'
+import { db as simpleDb } from '@/lib/db-simple'
 import { mockSupplements } from '@/lib/mock-data'
 
 /**
