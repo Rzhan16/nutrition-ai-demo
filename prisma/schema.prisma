@@ -1,0 +1,45 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Supplement {
+  id          String   @id @default(cuid())
+  name        String
+  brand       String
+  category    String
+  ingredients Json     // [{name: string, amount: string, unit: string}]
+  imageUrl    String?
+  verified    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  
+  scans       Scan[]
+  @@map("supplements")
+}
+
+model Scan {
+  id           String   @id @default(cuid())
+  supplementId String?
+  imageUrl     String
+  ocrText      String?
+  analysis     Json?    // AI analysis result
+  userId       String?  // Browser fingerprint
+  createdAt    DateTime @default(now())
+  
+  supplement   Supplement? @relation(fields: [supplementId], references: [id])
+  @@map("scans")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  fingerprint String   @unique
+  loginCount  Int      @default(1)
+  lastLogin   DateTime @default(now())
+  preferences Json?
+  
+  @@map("users")
+}

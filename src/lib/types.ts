@@ -8,6 +8,11 @@ export interface Supplement {
   imageUrl?: string;
   verified: boolean;
   createdAt: Date;
+  scans?: Scan[];
+  _count?: {
+    scans: number;
+  };
+  relevanceScore?: number;
 }
 
 export interface ParsedIngredient {
@@ -335,4 +340,109 @@ export const POPULAR_BRANDS = [
 ] as const;
 
 export type SupplementCategory = typeof SUPPLEMENT_CATEGORIES[number];
-export type PopularBrand = typeof POPULAR_BRANDS[number]; 
+export type SupplementBrand = typeof POPULAR_BRANDS[number];
+
+// API Response Types
+export interface APIResponse<T = any> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+}
+
+export interface UploadResponse {
+  imageUrl: string;
+  filename: string;
+  metadata: {
+    width: number;
+    height: number;
+    format: string;
+    size: number;
+  };
+  originalName: string;
+  uploadedAt: string;
+}
+
+export interface AnalysisResponse {
+  supplementName: string;
+  brand?: string;
+  confidence: number;
+  analysis: {
+    basicIntroduction: string;
+    primaryBenefits: string;
+    rdaGuidelines: string;
+    safetyLimits: string;
+    dietarySources: string;
+    supplementForms: string;
+    usageScenarios: string;
+    risksPrecautions: string;
+  };
+  ingredients: Array<{
+    name: string;
+    amount: string;
+    unit: string;
+    dailyValue?: number;
+  }>;
+  warnings?: string[];
+  recommendations?: string[];
+  scanId: string;
+  supplementId?: string;
+  cached: boolean;
+  ocrConfidence?: number;
+}
+
+export interface SearchResponse {
+  supplements: Supplement[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+  };
+  suggestions: {
+    categories: string[];
+    brands: string[];
+    popularSearches: string[];
+  };
+  searchMeta: {
+    query: string;
+    filters: {
+      category?: string;
+      brand?: string;
+    };
+    resultCount: number;
+  };
+}
+
+export interface ScanHistoryResponse {
+  scans: Array<Scan & {
+    supplement?: {
+      id: string;
+      name: string;
+      brand: string;
+      category: string;
+    };
+  }>;
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+  };
+}
+
+// Rate Limiting Types
+export interface RateLimitInfo {
+  remaining: number;
+  resetTime: number;
+}
+
+// Error Types
+export interface APIError {
+  code: string;
+  message: string;
+  details?: any;
+  statusCode: number;
+} 
