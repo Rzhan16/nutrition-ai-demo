@@ -7,10 +7,6 @@
       "maxDuration": 30
     }
   },
-  "env": {
-    "DATABASE_URL": "@database-url",
-    "DIRECT_URL": "@direct-url"
-  },
   "headers": [
     {
       "source": "/api/(.*)",
