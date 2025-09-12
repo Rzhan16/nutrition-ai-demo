@@ -1,11 +1,25 @@
 {
-  "buildCommand": "npm run build",
-  "devCommand": "npm run dev",
-  "installCommand": "npm install",
   "framework": "nextjs",
+  "buildCommand": "prisma generate && npm run build",
+  "installCommand": "npm install",
   "functions": {
-    "src/app/api/**/*.ts": {
+    "app/api/**": {
       "maxDuration": 30
     }
-  }
+  },
+  "env": {
+    "DATABASE_URL": "@database-url",
+    "DIRECT_URL": "@direct-url"
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "s-maxage=300, stale-while-revalidate"
+        }
+      ]
+    }
+  ]
 }

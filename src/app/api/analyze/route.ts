@@ -109,16 +109,18 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     
     // Check if we have a cached analysis for this text
     let existingScan = null
-    try {
-      existingScan = await prisma.scan.findFirst({
-        where: {
-          ocrText: ocrText,
-          analysis: { not: null } as any
-        },
-        orderBy: { createdAt: 'desc' }
-      })
-    } catch (error) {
-      console.log('Database not available, skipping cache check')
+    if (prisma) {
+      try {
+        existingScan = await prisma.scan.findFirst({
+          where: {
+            ocrText: ocrText,
+            analysis: { not: null } as any
+          },
+          orderBy: { createdAt: 'desc' }
+        })
+      } catch (error) {
+        console.log('Database not available, skipping cache check')
+      }
     }
     
     if (existingScan && existingScan.analysis) {
@@ -154,36 +156,38 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     let scan = { id: `mock-scan-${Date.now()}` }
     let supplementId: string | undefined
     
-    try {
-      scan = await prisma.scan.create({
-        data: {
-          imageUrl: imageUrl || '',
-          ocrText,
-          analysis: aiAnalysis,
-          userId
-        }
-      })
-      
-      // Try to match with existing supplement
-      if (aiAnalysis.supplementName && aiAnalysis.brand) {
-        const supplement = await prisma.supplement.findFirst({
-          where: {
-            name: { contains: aiAnalysis.supplementName },
-            brand: { contains: aiAnalysis.brand }
+    if (prisma) {
+      try {
+        scan = await prisma.scan.create({
+          data: {
+            imageUrl: imageUrl || '',
+            ocrText,
+            analysis: aiAnalysis,
+            userId
           }
         })
         
-        if (supplement) {
-          supplementId = supplement.id
-          // Update scan with supplement reference
-          await prisma.scan.update({
-            where: { id: scan.id },
-            data: { supplementId }
+        // Try to match with existing supplement
+        if (aiAnalysis.supplementName && aiAnalysis.brand) {
+          const supplement = await prisma.supplement.findFirst({
+            where: {
+              name: { contains: aiAnalysis.supplementName },
+              brand: { contains: aiAnalysis.brand }
+            }
           })
+          
+          if (supplement) {
+            supplementId = supplement.id
+            // Update scan with supplement reference
+            await prisma.scan.update({
+              where: { id: scan.id },
+              data: { supplementId }
+            })
+          }
         }
+      } catch (error) {
+        console.log('Database not available, skipping scan save')
       }
-    } catch (error) {
-      console.log('Database not available, skipping scan save')
     }
     
     // Return analysis result

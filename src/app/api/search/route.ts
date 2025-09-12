@@ -100,27 +100,42 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
   // Execute database query with fallback to mock data
   let supplements, total
   
-  try {
-    [supplements, total] = await Promise.all([
-      prisma.supplement.findMany({
-        where: whereClause,
-        orderBy: [
-          { verified: 'desc' }, // Verified supplements first
-          { createdAt: 'desc' }
-        ],
-        take: pageSize,
-        skip: offset,
-        include: {
-          _count: {
-            select: { scans: true }
+  if (prisma) {
+    try {
+      [supplements, total] = await Promise.all([
+        prisma.supplement.findMany({
+          where: whereClause,
+          orderBy: [
+            { verified: 'desc' }, // Verified supplements first
+            { createdAt: 'desc' }
+          ],
+          take: pageSize,
+          skip: offset,
+          include: {
+            _count: {
+              select: { scans: true }
+            }
           }
+        }),
+        prisma.supplement.count({ where: whereClause })
+      ])
+    } catch (error) {
+      // Fallback to mock data if database is not available
+      console.log('Database not available, using mock data')
+      supplements = mockSupplements.filter(supplement => {
+        if (searchQuery) {
+          return supplement.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                 supplement.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                 supplement.category.toLowerCase().includes(searchQuery.toLowerCase())
         }
-      }),
-      prisma.supplement.count({ where: whereClause })
-    ])
-  } catch (error) {
-    // Fallback to mock data if database is not available
-    console.log('Database not available, using mock data')
+        return true
+      })
+      total = supplements.length
+      supplements = supplements.slice(offset, offset + pageSize)
+    }
+  } else {
+    // Use mock data if prisma is not available
+    console.log('Prisma not available, using mock data')
     supplements = mockSupplements.filter(supplement => {
       if (searchQuery) {
         return supplement.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
