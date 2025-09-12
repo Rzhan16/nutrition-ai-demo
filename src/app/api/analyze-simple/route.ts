@@ -1,5 +1,42 @@
 import { NextRequest } from 'next/server'
-import { mockAnalysis } from '@/lib/mock-data'
+
+// Mock analysis data (inline to avoid import issues)
+const mockAnalysis = {
+  supplementName: 'Vitamin D3',
+  brand: 'Generic',
+  confidence: 0.88,
+  analysis: {
+    basicIntroduction: 'Vitamin D3 (cholecalciferol) is a fat-soluble vitamin essential for bone health and immune function.',
+    primaryBenefits: 'Supports bone health, immune system function, and calcium absorption. May help prevent osteoporosis and support cardiovascular health.',
+    rdaGuidelines: 'Adults: 600-800 IU (15-20 mcg) daily. Higher doses may be needed for deficiency correction under medical supervision.',
+    safetyLimits: 'Upper limit: 4000 IU (100 mcg) daily for adults. Excessive intake can lead to hypercalcemia and kidney damage.',
+    dietarySources: 'Fatty fish (salmon, mackerel), fortified dairy products, egg yolks, and sunlight exposure.',
+    supplementForms: 'Capsules, tablets, liquid drops, and gummies. D3 (cholecalciferol) is more effective than D2 (ergocalciferol).',
+    usageScenarios: 'Recommended for individuals with limited sun exposure, darker skin, older adults, and those with bone health concerns.',
+    risksPrecautions: 'May interact with certain medications. Consult healthcare provider if taking blood thinners or have kidney disease.'
+  },
+  ingredients: [
+    {
+      name: 'Vitamin D3',
+      amount: '25',
+      unit: 'mcg',
+      dailyValue: 125
+    }
+  ],
+  warnings: [
+    'Keep out of reach of children',
+    'Do not exceed recommended dosage',
+    'Consult healthcare provider if pregnant or nursing'
+  ],
+  recommendations: [
+    'Take with a meal containing fat for better absorption',
+    'Consider testing vitamin D levels before and after supplementation',
+    'Combine with calcium and magnesium for optimal bone health'
+  ],
+  scanId: 'mock-scan-1',
+  cached: false,
+  ocrConfidence: 0.92
+}
 
 /**
  * Simple analyze endpoint that works without database

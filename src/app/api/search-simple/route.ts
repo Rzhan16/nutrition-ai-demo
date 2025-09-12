@@ -1,5 +1,49 @@
 import { NextRequest } from 'next/server'
-import { mockSupplements } from '@/lib/mock-data'
+
+// Mock supplements data (inline to avoid import issues)
+const mockSupplements = [
+  {
+    id: 'mock-1',
+    name: 'Vitamin D3 1000 IU',
+    brand: 'Pure Encapsulations',
+    category: 'Vitamins',
+    ingredients: [
+      { name: 'Vitamin D3 (as cholecalciferol)', amount: '25', unit: 'mcg' },
+      { name: 'Medium chain triglycerides', amount: '200', unit: 'mg' }
+    ],
+    verified: true,
+    createdAt: new Date(),
+    _count: { scans: 0 },
+    relevanceScore: 10
+  },
+  {
+    id: 'mock-2',
+    name: 'Omega-3 Fish Oil',
+    brand: 'Nordic Naturals',
+    category: 'Omega-3',
+    ingredients: [
+      { name: 'EPA (eicosapentaenoic acid)', amount: '650', unit: 'mg' },
+      { name: 'DHA (docosahexaenoic acid)', amount: '450', unit: 'mg' }
+    ],
+    verified: true,
+    createdAt: new Date(),
+    _count: { scans: 0 },
+    relevanceScore: 9
+  },
+  {
+    id: 'mock-3',
+    name: 'Magnesium Glycinate',
+    brand: 'Thorne',
+    category: 'Minerals',
+    ingredients: [
+      { name: 'Magnesium (as magnesium glycinate)', amount: '120', unit: 'mg' }
+    ],
+    verified: true,
+    createdAt: new Date(),
+    _count: { scans: 0 },
+    relevanceScore: 8
+  }
+]
 
 /**
  * Simple search endpoint that works without database
