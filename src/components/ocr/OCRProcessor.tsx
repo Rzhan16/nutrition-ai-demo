@@ -34,18 +34,30 @@ export function OCRProcessor({ onResult, onError, className = '' }: OCRProcessor
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const barcodeScannerRef = useRef<HTMLDivElement>(null);
   const [isUsingCamera, setIsUsingCamera] = useState<boolean>(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [cameraError, setCameraError] = useState<string>('');
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      cleanupResources();
+    };
+  }, []);
+
+  // Cleanup resources
+  const cleanupResources = useCallback(() => {
+    try {
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
+        setStream(null);
       }
       ocrService.cleanup();
       barcodeService.cleanup();
-    };
+    } catch (error) {
+      console.warn('Error during cleanup:', error);
+    }
   }, [stream]);
 
   const updateProgress = useCallback((stage: ProcessingState['stage'], progress: number) => {
@@ -57,6 +69,7 @@ export function OCRProcessor({ onResult, onError, className = '' }: OCRProcessor
 
     try {
       setProcessingState({ isProcessing: true, progress: 0, stage: 'uploading' });
+      setCameraError('');
       
       // Create preview
       const imageUrl = URL.createObjectURL(file);
@@ -118,9 +131,27 @@ export function OCRProcessor({ onResult, onError, className = '' }: OCRProcessor
   }, [scanMode, onResult, onError, updateProgress]);
 
   const startCamera = useCallback(async () => {
+    setCameraError('');
+    
     try {
+      // Check if we're in a browser environment
+      if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+        throw new Error('Camera not available in this environment');
+      }
+
+      // Check camera permission first
+      const hasPermission = await barcodeService.checkCameraPermission();
+      if (!hasPermission) {
+        throw new Error('Camera permission denied. Please allow camera access and try again.');
+      }
+
+      // Start media stream
       const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' }
+        video: { 
+          facingMode: 'environment',
+          width: { ideal: 640 },
+          height: { ideal: 480 }
+        }
       });
       
       setStream(mediaStream);
@@ -128,83 +159,132 @@ export function OCRProcessor({ onResult, onError, className = '' }: OCRProcessor
       
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
+        
+        // Wait for video to be ready
+        await new Promise((resolve, reject) => {
+          if (videoRef.current) {
+            videoRef.current.onloadedmetadata = () => resolve(true);
+            videoRef.current.onerror = () => reject(new Error('Video loading failed'));
+          }
+        });
       }
 
-      // Initialize barcode scanner for live scanning
-      if (scanMode === 'barcode' || scanMode === 'both') {
-        await barcodeService.initializeScanner({
-          target: videoRef.current || '#camera-view'
-        });
+      // Initialize barcode scanner only if in barcode mode
+      if ((scanMode === 'barcode' || scanMode === 'both') && barcodeScannerRef.current) {
+        try {
+          await barcodeService.initializeScanner({
+            target: barcodeScannerRef.current,
+            formats: ['ean_reader', 'ean_8_reader', 'code_128_reader', 'code_39_reader'],
+            frequency: 10
+          });
 
-        await barcodeService.startScanning(
-          (result) => {
-            console.log('Live barcode detected:', result);
-            stopCamera();
-            onResult(result);
-          },
-          (error) => {
-            console.error('Barcode scanning error:', error);
-          }
-        );
+          await barcodeService.startScanning(
+            (result) => {
+              console.log('Live barcode detected:', result);
+              stopCamera();
+              onResult(result);
+            },
+            (error) => {
+              console.error('Barcode scanning error:', error);
+              setCameraError(`Barcode scanning error: ${error.message}`);
+            }
+          );
+        } catch (barcodeError) {
+          console.warn('Barcode scanner initialization failed:', barcodeError);
+          setCameraError('Barcode scanning not available, but camera works for OCR capture');
+        }
       }
 
     } catch (error) {
       console.error('Camera access failed:', error);
-      onError('Camera access denied or not available');
+      const errorMessage = error instanceof Error ? error.message : 'Camera access failed';
+      setCameraError(errorMessage);
+      onError(errorMessage);
+      stopCamera();
     }
   }, [scanMode, onResult, onError]);
 
   const stopCamera = useCallback(() => {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-      setStream(null);
+    try {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        setStream(null);
+      }
+      setIsUsingCamera(false);
+      setCameraError('');
+      barcodeService.stopScanning();
+    } catch (error) {
+      console.warn('Error stopping camera:', error);
     }
-    setIsUsingCamera(false);
-    barcodeService.stopScanning();
   }, [stream]);
 
   const captureFromCamera = useCallback(async () => {
-    if (!videoRef.current || !canvasRef.current) return;
+    if (!videoRef.current || !canvasRef.current) {
+      onError('Camera or canvas not available');
+      return;
+    }
 
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
+    try {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
 
-    if (!ctx) return;
-
-    // Set canvas size to match video
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-
-    // Draw current frame
-    ctx.drawImage(video, 0, 0);
-
-    // Convert to blob and process
-    canvas.toBlob(async (blob) => {
-      if (blob) {
-        const file = new File([blob], 'camera-capture.jpg', { type: 'image/jpeg' });
-        await handleFileUpload(file);
+      if (!ctx) {
+        throw new Error('Canvas context not available');
       }
-    }, 'image/jpeg', 0.8);
 
-    stopCamera();
-  }, [handleFileUpload, stopCamera]);
+      // Set canvas size to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      // Draw current frame
+      ctx.drawImage(video, 0, 0);
+
+      // Convert to blob and process
+      canvas.toBlob(async (blob) => {
+        if (blob) {
+          const file = new File([blob], 'camera-capture.jpg', { type: 'image/jpeg' });
+          await handleFileUpload(file);
+        } else {
+          onError('Failed to capture image from camera');
+        }
+      }, 'image/jpeg', 0.8);
+
+      stopCamera();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Camera capture failed';
+      onError(errorMessage);
+    }
+  }, [handleFileUpload, stopCamera, onError]);
 
   const handleManualSubmit = useCallback(() => {
     if (!manualEdit.trim()) return;
 
-    // Create mock OCR result with manual text
-    const mockResult: OCRResult = {
-      text: manualEdit,
-      confidence: 1.0, // High confidence for manual input
-      ingredients: [],
-      processingTime: 0,
-      warnings: []
-    };
+    try {
+      // Create mock OCR result with manual text
+      const mockResult: OCRResult = {
+        text: manualEdit,
+        confidence: 1.0, // High confidence for manual input
+        ingredients: [],
+        processingTime: 0,
+        warnings: []
+      };
 
+      setShowManualEdit(false);
+      onResult(mockResult);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Manual submission failed';
+      onError(errorMessage);
+    }
+  }, [manualEdit, onResult, onError]);
+
+  const resetState = useCallback(() => {
+    setPreviewImage(null);
+    setDetectedText('');
     setShowManualEdit(false);
-    onResult(mockResult);
-  }, [manualEdit, onResult]);
+    setCameraError('');
+    setProcessingState({ isProcessing: false, progress: 0, stage: 'idle' });
+  }, []);
 
   const getStageText = () => {
     switch (processingState.stage) {
@@ -223,7 +303,7 @@ export function OCRProcessor({ onResult, onError, className = '' }: OCRProcessor
       {/* Scan Mode Selection */}
       <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
         <button
-          onClick={() => setScanMode('both')}
+          onClick={() => { setScanMode('both'); resetState(); }}
           className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${
             scanMode === 'both'
               ? 'bg-white text-blue-600 shadow-sm'
@@ -233,7 +313,7 @@ export function OCRProcessor({ onResult, onError, className = '' }: OCRProcessor
           Smart Scan
         </button>
         <button
-          onClick={() => setScanMode('barcode')}
+          onClick={() => { setScanMode('barcode'); resetState(); }}
           className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${
             scanMode === 'barcode'
               ? 'bg-white text-blue-600 shadow-sm'
@@ -243,7 +323,7 @@ export function OCRProcessor({ onResult, onError, className = '' }: OCRProcessor
           Barcode Only
         </button>
         <button
-          onClick={() => setScanMode('ocr')}
+          onClick={() => { setScanMode('ocr'); resetState(); }}
           className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${
             scanMode === 'ocr'
               ? 'bg-white text-blue-600 shadow-sm'
@@ -263,13 +343,40 @@ export function OCRProcessor({ onResult, onError, className = '' }: OCRProcessor
             playsInline
             className="w-full h-64 bg-black rounded-lg object-cover"
           />
+          
+          {/* Barcode Scanner Overlay */}
+          {(scanMode === 'barcode' || scanMode === 'both') && (
+            <div 
+              ref={barcodeScannerRef}
+              className="absolute inset-0 pointer-events-none"
+            />
+          )}
+          
+          {/* Scanning Guide Overlay */}
           <div className="absolute inset-0 border-2 border-blue-400 rounded-lg pointer-events-none">
             <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-48 h-32 border-2 border-white rounded-lg opacity-50" />
+            {scanMode === 'barcode' && (
+              <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs">
+                📱 Point at barcode
+              </div>
+            )}
+            {scanMode === 'ocr' && (
+              <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs">
+                📝 Point at text label
+              </div>
+            )}
+            {scanMode === 'both' && (
+              <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs">
+                🎯 Scan barcode or text
+              </div>
+            )}
           </div>
+          
           <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
             <button
               onClick={captureFromCamera}
-              className="bg-white text-gray-900 px-4 py-2 rounded-lg font-medium shadow-lg hover:bg-gray-100 transition-colors"
+              disabled={processingState.isProcessing}
+              className="bg-white text-gray-900 px-4 py-2 rounded-lg font-medium shadow-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
             >
               Capture
             </button>
@@ -280,6 +387,23 @@ export function OCRProcessor({ onResult, onError, className = '' }: OCRProcessor
               Stop
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Camera Error Display */}
+      {cameraError && (
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 text-orange-600" />
+            <span className="font-medium text-orange-900">Camera Issue</span>
+          </div>
+          <p className="text-orange-700 mt-1 text-sm">{cameraError}</p>
+          <button
+            onClick={() => setCameraError('')}
+            className="mt-2 text-orange-600 hover:text-orange-800 font-medium text-sm"
+          >
+            Dismiss
+          </button>
         </div>
       )}
 
@@ -343,7 +467,7 @@ export function OCRProcessor({ onResult, onError, className = '' }: OCRProcessor
           </div>
           <p className="text-red-700 mt-1">{processingState.error}</p>
           <button
-            onClick={() => setProcessingState({ isProcessing: false, progress: 0, stage: 'idle' })}
+            onClick={resetState}
             className="mt-2 text-red-600 hover:text-red-800 font-medium"
           >
             Try Again
@@ -362,12 +486,7 @@ export function OCRProcessor({ onResult, onError, className = '' }: OCRProcessor
               className="w-full h-48 object-contain bg-gray-50 rounded-lg border"
             />
             <button
-              onClick={() => {
-                setPreviewImage(null);
-                setDetectedText('');
-                setShowManualEdit(false);
-                setProcessingState({ isProcessing: false, progress: 0, stage: 'idle' });
-              }}
+              onClick={resetState}
               className="absolute top-2 right-2 bg-white rounded-full p-1 shadow-md hover:bg-gray-100"
             >
               <X className="w-4 h-4" />
