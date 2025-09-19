@@ -45,6 +45,9 @@ export interface HeaderProps {
 const navigation: NavigationItem[] = [
   { name: 'Home', href: '/' },
   { name: 'AI Scan', href: '/analyze' },
+  { name: 'Search', href: '/search' },
+  { name: 'Upload', href: '/upload' },
+  { name: 'Test Scanner', href: '/test-scanner' },
   { name: 'Components', href: '/components-demo' },
   { name: 'My Plan', href: '/plan' },
   { name: 'Community', href: '/community' },
