@@ -4,7 +4,8 @@ import React, { useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FlaskConical, Menu, Moon, Sun } from 'lucide-react';
+import { FlaskConical, Menu, Moon, Settings2, Sun } from 'lucide-react';
+import { toggleDebugDrawer } from '@/components/analyze/DebugDrawer';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { cn } from '@/lib/utils';
 
@@ -72,6 +73,7 @@ export function Header({
 }: HeaderProps) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  const isDebugPage = pathname === '/test-scanner';
 
   // Close mobile menu on route change
   React.useEffect(() => {
@@ -148,6 +150,17 @@ export function Header({
 
         {/* Desktop Actions */}
         <div className="hidden md:flex items-center space-x-4">
+          {isDebugPage ? (
+            <button
+              type="button"
+              onClick={() => toggleDebugDrawer()}
+              className="relative z-[70] inline-flex items-center gap-2 rounded-full border border-border-light bg-white/90 px-3 py-2 text-sm font-medium text-text-dark shadow-sm transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-brand-medical focus:ring-offset-2"
+              aria-label="Toggle debug drawer"
+            >
+              <Settings2 className="h-4 w-4" aria-hidden="true" />
+              Debug
+            </button>
+          ) : null}
           {/* Theme Toggle */}
           {showThemeToggle && (
             <DropdownMenu.Root>
@@ -268,6 +281,17 @@ export function Header({
                   </div>
                 </div>
               )}
+              {isDebugPage ? (
+                <div className="pt-4 border-t border-border-light">
+                  <button
+                    type="button"
+                    onClick={() => toggleDebugDrawer()}
+                    className="w-full rounded-lg bg-brand-medical px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-medical/90 focus:outline-none focus:ring-2 focus:ring-brand-medical focus:ring-offset-2"
+                  >
+                    Open Debug Drawer
+                  </button>
+                </div>
+              ) : null}
             </nav>
           </motion.div>
         )}

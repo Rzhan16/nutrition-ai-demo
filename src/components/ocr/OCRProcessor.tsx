@@ -2,8 +2,12 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Camera, Upload, RotateCcw, Zap, AlertCircle, CheckCircle, X } from 'lucide-react';
-import { ocrService, OCRResult } from '@/lib/ocr';
+import type { OCRResult } from '@/lib/types';
 import { barcodeService, BarcodeResult } from '@/lib/barcode';
+import type { RecognizeResult } from 'tesseract.js';
+import { getOcrWorker } from '@/lib/ocr/worker';
+import type { TesseractLoggerMessage } from '@/lib/ocr/worker';
+import { fileToCanvas } from '@/lib/ocr/preprocess';
 
 interface OCRProcessorProps {
   onResult: (result: OCRResult | BarcodeResult) => void;
@@ -14,15 +18,18 @@ interface OCRProcessorProps {
 interface ProcessingState {
   isProcessing: boolean;
   progress: number;
-  stage: 'idle' | 'uploading' | 'enhancing' | 'scanning_barcode' | 'extracting_text' | 'parsing' | 'complete';
+  stage: 'idle' | 'uploading' | 'enhancing' | 'scanning_barcode' | 'extracting_text' | 'parsing' | 'complete' | 'error';
   error?: string;
+  status?: string;
 }
 
 export function OCRProcessor({ onResult, onError, className = '' }: OCRProcessorProps) {
   const [processingState, setProcessingState] = useState<ProcessingState>({
     isProcessing: false,
     progress: 0,
-    stage: 'idle'
+    stage: 'idle',
+    status: undefined,
+    error: undefined,
   });
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [detectedText, setDetectedText] = useState<string>('');
@@ -35,58 +42,140 @@ export function OCRProcessor({ onResult, onError, className = '' }: OCRProcessor
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const barcodeScannerRef = useRef<HTMLDivElement>(null);
+  const frameLoopRef = useRef<number | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const isProcessingRef = useRef(false);
   const [isUsingCamera, setIsUsingCamera] = useState<boolean>(false);
-  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [, setStream] = useState<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState<string>('');
+
+  const stopFrameLoop = useCallback(() => {
+    if (frameLoopRef.current !== null) {
+      cancelAnimationFrame(frameLoopRef.current);
+      frameLoopRef.current = null;
+    }
+  }, []);
+
+  const stopLiveScan = useCallback(() => {
+    stopFrameLoop();
+    const currentStream = streamRef.current;
+    if (currentStream) {
+      currentStream.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setStream((prev) => {
+      if (prev) {
+        prev.getTracks().forEach((track) => track.stop());
+      }
+      return null;
+    });
+    setIsUsingCamera(false);
+    if (videoRef.current) {
+      try {
+        videoRef.current.pause();
+      } catch (pauseError) {
+        console.warn('Video pause failed:', pauseError);
+      }
+      videoRef.current.srcObject = null;
+    }
+    barcodeService.stopScanning();
+  }, [setStream, setIsUsingCamera, stopFrameLoop]);
+
+  const startFrameLoop = useCallback(() => {
+    if (!videoRef.current || !canvasRef.current) return;
+
+    const render = () => {
+      if (!videoRef.current || !canvasRef.current) {
+        frameLoopRef.current = null;
+        return;
+      }
+
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        frameLoopRef.current = null;
+        return;
+      }
+
+      if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+        }
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      }
+
+      frameLoopRef.current = requestAnimationFrame(render);
+    };
+
+    stopFrameLoop();
+    frameLoopRef.current = requestAnimationFrame(render);
+  }, [stopFrameLoop]);
+
+  // Cleanup resources
+  const cleanupResources = useCallback(() => {
+    try {
+      stopLiveScan();
+      barcodeService.cleanup();
+    } catch (error) {
+      console.warn('Error during cleanup:', error);
+    }
+  }, [stopLiveScan]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       cleanupResources();
     };
-  }, []);
+  }, [cleanupResources]);
 
-  // Cleanup resources
-  const cleanupResources = useCallback(() => {
-    try {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-        setStream(null);
-      }
-      ocrService.cleanup();
-      barcodeService.cleanup();
-    } catch (error) {
-      console.warn('Error during cleanup:', error);
-    }
-  }, [stream]);
-
-  const updateProgress = useCallback((stage: ProcessingState['stage'], progress: number) => {
-    setProcessingState(prev => ({ ...prev, stage, progress }));
-  }, []);
+  const updateProgress = useCallback(
+    (stage: ProcessingState['stage'], progress: number, status?: string) => {
+      setProcessingState((prev) => ({
+        ...prev,
+        stage,
+        progress,
+        status,
+        error: undefined,
+      }));
+    },
+  []);
 
   const handleFileUpload = useCallback(async (file: File) => {
-    if (!file) return;
+    if (!file || isProcessingRef.current) return;
+
+    isProcessingRef.current = true;
+
+    setProcessingState({ isProcessing: true, progress: 0, stage: 'uploading', error: undefined, status: 'Preparing image' });
+    setCameraError('');
+    setShowManualEdit(false);
+    setDetectedText('');
+    setConfidence(0);
+    setManualEdit('');
+
+    stopLiveScan();
 
     try {
-      setProcessingState({ isProcessing: true, progress: 0, stage: 'uploading' });
-      setCameraError('');
-      
-      // Create preview
       const imageUrl = URL.createObjectURL(file);
-      setPreviewImage(imageUrl);
-      updateProgress('uploading', 20);
+      setPreviewImage((previous) => {
+        if (previous) {
+          URL.revokeObjectURL(previous);
+        }
+        return imageUrl;
+      });
 
-      // Process based on scan mode
+      updateProgress('uploading', 20, 'Image uploaded');
+
       if (scanMode === 'barcode' || scanMode === 'both') {
-        updateProgress('scanning_barcode', 40);
-        
+        updateProgress('scanning_barcode', 40, 'Scanning for barcode');
         try {
           const barcodeResults = await barcodeService.scanFromImage(file);
-          
           if (barcodeResults.length > 0) {
-            updateProgress('complete', 100);
-            setProcessingState({ isProcessing: false, progress: 100, stage: 'complete' });
+            updateProgress('complete', 100, 'Barcode detected');
+            setProcessingState({ isProcessing: false, progress: 100, stage: 'complete', status: 'Barcode detected' });
             onResult(barcodeResults[0]);
+            isProcessingRef.current = false;
             return;
           }
         } catch (barcodeError) {
@@ -95,45 +184,102 @@ export function OCRProcessor({ onResult, onError, className = '' }: OCRProcessor
       }
 
       if (scanMode === 'ocr' || scanMode === 'both') {
-        updateProgress('enhancing', 50);
-        
-        // Process with OCR
-        updateProgress('extracting_text', 70);
-        const ocrResult = await ocrService.processImage(file);
-        
-        updateProgress('parsing', 90);
-        setDetectedText(ocrResult.text);
-        setConfidence(ocrResult.confidence);
-        setManualEdit(ocrResult.text);
+        updateProgress('enhancing', 50, 'Preparing image for OCR');
+        const canvas = await fileToCanvas(file, 1600);
+        updateProgress('extracting_text', 60, 'Running OCR');
 
-        updateProgress('complete', 100);
-        setProcessingState({ isProcessing: false, progress: 100, stage: 'complete' });
+        const recognitionStartedAt = performance.now();
+        const worker = await getOcrWorker((message: TesseractLoggerMessage) => {
+          if (typeof message.progress === 'number') {
+            const percent = Math.round(Math.min(1, Math.max(0, message.progress)) * 100);
+            setProcessingState((prev) => ({
+              ...prev,
+              stage: 'extracting_text',
+              progress: Math.max(prev.progress, percent),
+              status: message.status ?? prev.status,
+            }));
+          } else if (message.status) {
+            setProcessingState((prev) => ({
+              ...prev,
+              status: message.status,
+            }));
+          }
+        });
 
-        // Show manual edit if confidence is low
-        if (ocrResult.confidence < 0.8) {
+        const recognizePromise: Promise<RecognizeResult> = worker.recognize(canvas as HTMLCanvasElement);
+        const recognition = await Promise.race([
+          recognizePromise,
+          new Promise<never>((_, reject) => {
+            const timeoutId = window.setTimeout(() => {
+              reject(new Error('OCR timeout'));
+            }, 30000);
+            recognizePromise.then(
+              () => window.clearTimeout(timeoutId),
+              () => window.clearTimeout(timeoutId),
+            );
+          }),
+        ]);
+
+        const durationMs = Math.round(performance.now() - recognitionStartedAt);
+        const text = recognition.data?.text ?? '';
+        const confidenceRaw = recognition.data?.confidence;
+        const confidenceScore = typeof confidenceRaw === 'number' ? confidenceRaw / 100 : 0;
+        const warningsRaw = (recognition.data as { warnings?: unknown } | undefined)?.warnings ?? [];
+        const warnings = Array.isArray(warningsRaw)
+          ? warningsRaw.filter((item): item is string => typeof item === 'string')
+          : [];
+
+        updateProgress('parsing', 90, 'Parsing OCR results');
+
+        setDetectedText(text);
+        setConfidence(confidenceScore);
+        setManualEdit(text);
+
+        const ocrResult: OCRResult = {
+          ok: confidenceScore >= 0.8,
+          text,
+          confidence: confidenceScore,
+          durationMs,
+          processingTime: durationMs,
+          warnings,
+        };
+
+        updateProgress('complete', 100, 'OCR complete');
+        setProcessingState({ isProcessing: false, progress: 100, stage: 'complete', status: 'OCR complete' });
+
+        if (confidenceScore < 0.8) {
           setShowManualEdit(true);
         } else {
           onResult(ocrResult);
         }
+      } else {
+        setProcessingState({ isProcessing: false, progress: 100, stage: 'complete', status: 'Completed' });
       }
-
     } catch (error) {
       console.error('Processing failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      setProcessingState({ 
-        isProcessing: false, 
-        progress: 0, 
-        stage: 'idle', 
-        error: errorMessage 
-      });
+      setProcessingState({ isProcessing: false, progress: 0, stage: 'error', error: errorMessage, status: 'Error' });
       onError(errorMessage);
+    } finally {
+      isProcessingRef.current = false;
     }
-  }, [scanMode, onResult, onError, updateProgress]);
+  }, [scanMode, onResult, onError, stopLiveScan, updateProgress]);
+
+  const stopCamera = useCallback(() => {
+    try {
+      stopLiveScan();
+      setCameraError('');
+      barcodeService.cleanup();
+    } catch (error) {
+      console.warn('Error stopping camera:', error);
+    }
+  }, [stopLiveScan]);
 
   const startCamera = useCallback(async () => {
     setCameraError('');
-    
+
     try {
+      stopCamera();
       // Check if we're in a browser environment
       if (typeof window === 'undefined' || typeof navigator === 'undefined') {
         throw new Error('Camera not available in this environment');
@@ -155,18 +301,44 @@ export function OCRProcessor({ onResult, onError, className = '' }: OCRProcessor
       });
       
       setStream(mediaStream);
+      streamRef.current = mediaStream;
       setIsUsingCamera(true);
-      
+
       if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-        
-        // Wait for video to be ready
-        await new Promise((resolve, reject) => {
-          if (videoRef.current) {
-            videoRef.current.onloadedmetadata = () => resolve(true);
-            videoRef.current.onerror = () => reject(new Error('Video loading failed'));
+        const videoElement = videoRef.current;
+        videoElement.srcObject = mediaStream;
+        videoElement.muted = true;
+        videoElement.playsInline = true;
+        videoElement.setAttribute('playsinline', 'true');
+        videoElement.setAttribute('muted', 'true');
+
+        const waitForMetadata = new Promise<void>((resolve, reject) => {
+          const handleLoaded = () => {
+            videoElement.onloadedmetadata = null;
+            videoElement.onerror = null;
+            resolve();
+          };
+          const handleError = () => {
+            videoElement.onloadedmetadata = null;
+            videoElement.onerror = null;
+            reject(new Error('Video loading failed'));
+          };
+
+          if (videoElement.readyState >= HTMLMediaElement.HAVE_METADATA) {
+            handleLoaded();
+          } else {
+            videoElement.onloadedmetadata = handleLoaded;
+            videoElement.onerror = handleError;
           }
         });
+
+        await waitForMetadata;
+        try {
+          await videoElement.play();
+        } catch (playError) {
+          console.warn('Video playback could not start automatically:', playError);
+        }
+        startFrameLoop();
       }
 
       // Initialize barcode scanner only if in barcode mode
@@ -202,21 +374,7 @@ export function OCRProcessor({ onResult, onError, className = '' }: OCRProcessor
       onError(errorMessage);
       stopCamera();
     }
-  }, [scanMode, onResult, onError]);
-
-  const stopCamera = useCallback(() => {
-    try {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-        setStream(null);
-      }
-      setIsUsingCamera(false);
-      setCameraError('');
-      barcodeService.stopScanning();
-    } catch (error) {
-      console.warn('Error stopping camera:', error);
-    }
-  }, [stream]);
+  }, [onError, onResult, scanMode, startFrameLoop, stopCamera]);
 
   const captureFromCamera = useCallback(async () => {
     if (!videoRef.current || !canvasRef.current) {
@@ -233,6 +391,10 @@ export function OCRProcessor({ onResult, onError, className = '' }: OCRProcessor
         throw new Error('Canvas context not available');
       }
 
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        throw new Error('Camera feed not ready yet');
+      }
+
       // Set canvas size to match video
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
@@ -241,21 +403,21 @@ export function OCRProcessor({ onResult, onError, className = '' }: OCRProcessor
       ctx.drawImage(video, 0, 0);
 
       // Convert to blob and process
-      canvas.toBlob(async (blob) => {
-        if (blob) {
-          const file = new File([blob], 'camera-capture.jpg', { type: 'image/jpeg' });
-          await handleFileUpload(file);
-        } else {
-          onError('Failed to capture image from camera');
-        }
-      }, 'image/jpeg', 0.8);
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, 'image/jpeg', 0.8)
+      );
 
-      stopCamera();
+      if (!blob) {
+        throw new Error('Failed to capture image from camera');
+      }
+
+      const file = new File([blob], 'camera-capture.jpg', { type: 'image/jpeg' });
+      await handleFileUpload(file);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Camera capture failed';
       onError(errorMessage);
     }
-  }, [handleFileUpload, stopCamera, onError]);
+  }, [handleFileUpload, onError]);
 
   const handleManualSubmit = useCallback(() => {
     if (!manualEdit.trim()) return;
@@ -263,11 +425,13 @@ export function OCRProcessor({ onResult, onError, className = '' }: OCRProcessor
     try {
       // Create mock OCR result with manual text
       const mockResult: OCRResult = {
+        ok: true,
         text: manualEdit,
         confidence: 1.0, // High confidence for manual input
+        durationMs: 0,
         ingredients: [],
         processingTime: 0,
-        warnings: []
+        warnings: [],
       };
 
       setShowManualEdit(false);
@@ -279,11 +443,18 @@ export function OCRProcessor({ onResult, onError, className = '' }: OCRProcessor
   }, [manualEdit, onResult, onError]);
 
   const resetState = useCallback(() => {
-    setPreviewImage(null);
+    setPreviewImage((prev) => {
+      if (prev) {
+        URL.revokeObjectURL(prev);
+      }
+      return null;
+    });
     setDetectedText('');
+    setConfidence(0);
     setShowManualEdit(false);
     setCameraError('');
-    setProcessingState({ isProcessing: false, progress: 0, stage: 'idle' });
+    setManualEdit('');
+    setProcessingState({ isProcessing: false, progress: 0, stage: 'idle', error: undefined, status: undefined });
   }, []);
 
   const getStageText = () => {
@@ -293,6 +464,7 @@ export function OCRProcessor({ onResult, onError, className = '' }: OCRProcessor
       case 'scanning_barcode': return 'Scanning for barcode...';
       case 'extracting_text': return 'Extracting text with OCR...';
       case 'parsing': return 'Parsing supplement information...';
+      case 'error': return processingState.error ?? 'Processing error';
       case 'complete': return 'Processing complete!';
       default: return 'Ready to scan';
     }

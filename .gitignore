@@ -23,6 +23,7 @@
 # misc
 .DS_Store
 *.pem
+public/tesseract/
 
 # debug
 npm-debug.log*

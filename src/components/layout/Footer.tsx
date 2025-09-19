@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { FlaskConical, Heart, Shield, ExternalLink } from 'lucide-react';
@@ -105,6 +105,11 @@ export function Footer({
   disclaimerText,
 }: FooterProps) {
   const currentYear = new Date().getFullYear();
+  const [lastUpdated, setLastUpdated] = useState('');
+
+  useEffect(() => {
+    setLastUpdated(new Date().toLocaleDateString());
+  }, []);
 
   const defaultDisclaimer = 
     "This analysis is for educational purposes only and does not constitute medical advice. " +
@@ -230,7 +235,7 @@ export function Footer({
             <div>
               <span>Version 1.0.0</span>
               <span className="mx-2">•</span>
-              <span>Last updated: {new Date().toLocaleDateString()}</span>
+              <span>Last updated: {lastUpdated}</span>
             </div>
             <div className="mt-2 sm:mt-0">
               <span>Status: </span>

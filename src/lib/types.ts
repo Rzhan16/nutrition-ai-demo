@@ -1,4 +1,4 @@
-// Core Types
+// Core Domain Types
 export interface Supplement {
   id: string;
   name: string;
@@ -23,6 +23,13 @@ export interface ParsedIngredient {
   description?: string;
 }
 
+export interface NutritionFacts {
+  servingSize?: string;
+  servingsPerContainer?: string;
+  calories?: string;
+  nutrients?: ParsedIngredient[];
+}
+
 export interface Scan {
   id: string;
   supplementId?: string;
@@ -33,7 +40,6 @@ export interface Scan {
   createdAt: Date;
 }
 
-// AI Analysis Types
 export interface AnalysisRequest {
   supplementName: string;
   brand: string;
@@ -43,60 +49,276 @@ export interface AnalysisRequest {
 }
 
 export interface AnalysisResponse {
-  basicIntroduction: string;
-  primaryBenefits: Benefit[];
-  recommendedDosage: DosageInfo;
-  upperLimit: SafetyLimit;
-  dietarySources: string[];
-  supplementForms: SupplementForm[];
-  suitableConditions: string[];
-  risksAndPrecautions: Warning[];
-  references: Reference[];
+  supplementName: string;
+  brand?: string;
   confidence: number;
+  analysis: {
+    basicIntroduction: string;
+    primaryBenefits: string;
+    rdaGuidelines: string;
+    safetyLimits: string;
+    dietarySources: string;
+    supplementForms: string;
+    usageScenarios: string;
+    risksPrecautions: string;
+  };
+  ingredients: Array<{
+    name: string;
+    amount: string;
+    unit: string;
+    dailyValue?: number;
+  }>;
+  warnings?: string[];
+  recommendations?: string[];
+  references?: string[];
+  scanId: string;
+  supplementId?: string;
+  cached: boolean;
+  ocrConfidence?: number;
+  analysisMethod?: string;
+  sources?: string[];
 }
 
-export interface Benefit {
-  title: string;
-  description: string;
-  evidenceLevel: 'High' | 'Moderate' | 'Limited';
-  studies?: string[];
+export interface UploadResponse {
+  imageUrl: string;
+  filename: string;
+  metadata: {
+    width: number;
+    height: number;
+    format: string;
+    size: number;
+  };
+  originalName: string;
+  uploadedAt: string;
 }
 
-export interface DosageInfo {
-  adults: string;
-  olderAdults?: string;
-  specialPopulations?: Record<string, string>;
+// Barcode Types
+export const BARCODE_ENGINE_VALUES = ['quagga', 'zxing', 'html5-qrcode'] as const;
+export type BarcodeEngine = (typeof BARCODE_ENGINE_VALUES)[number];
+
+export const BARCODE_ENGINE_OPTIONS = ['auto', ...BARCODE_ENGINE_VALUES] as const;
+export type BarcodeEngineOption = (typeof BARCODE_ENGINE_OPTIONS)[number];
+
+export const BARCODE_FORMATS = ['EAN13', 'EAN8', 'UPC', 'UPCE', 'CODE128', 'CODE39'] as const;
+export type BarcodeFormat = (typeof BARCODE_FORMATS)[number];
+
+export type BarcodeErrorCode =
+  | 'barcode_failed'
+  | 'barcode_timeout'
+  | 'camera_permission_denied'
+  | 'camera_not_found'
+  | 'barcode_unsupported'
+  | 'not_allowed'
+  | 'not_found'
+  | 'unsupported'
+  | 'timeout'
+  | 'other'
+  | 'analyze_failed'
+  | 'search_failed';
+
+export interface BarcodeProductInfo {
+  name?: string;
+  brand?: string;
+  category?: string;
+  imageUrl?: string;
+  upc?: string;
+  ean?: string;
+  description?: string;
+  ingredients?: string[];
+  nutrition?: Record<string, unknown>;
+  warnings?: string[];
 }
 
-export interface SafetyLimit {
-  adults: string;
-  warnings: string[];
-  overdoseSymptoms: string[];
+export interface BarcodeScanResult {
+  ok: boolean;
+  code?: string;
+  format?: BarcodeFormat | string;
+  confidence?: number;
+  durationMs: number;
+  framesTried?: number;
+  engine: BarcodeEngine;
+  symbology?: string;
+  errorCode?: BarcodeErrorCode;
+  errorMessage?: string;
+  rawValue?: unknown;
+  productInfo?: BarcodeProductInfo;
+  timestamp?: number;
 }
 
-export interface SupplementForm {
-  name: string;
-  absorptionRate: string;
-  pros: string[];
-  cons: string[];
-  recommended: boolean;
+// OCR Types
+export interface OCRBoundingBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
-export interface Warning {
-  type: 'interaction' | 'condition' | 'side-effect' | 'general';
-  severity: 'low' | 'medium' | 'high';
-  description: string;
-  affectedMedications?: string[];
-  affectedConditions?: string[];
+export interface OCRWord {
+  text: string;
+  confidence: number;
+  bbox?: OCRBoundingBox;
 }
 
-export interface Reference {
-  title: string;
-  authors: string;
-  year: number;
-  journal?: string;
-  url?: string;
-  type: 'study' | 'guideline' | 'database';
+export type OCRErrorCode = 'ocr_failed' | 'ocr_low_confidence' | 'ocr_timeout' | 'analyze_failed' | 'search_failed';
+
+export interface OCRResult {
+  ok: boolean;
+  text: string;
+  confidence: number;
+  durationMs: number;
+  words?: OCRWord[];
+  bbox?: OCRBoundingBox[];
+  wasAborted?: boolean;
+  errorCode?: OCRErrorCode;
+  errorMessage?: string;
+  raw?: unknown;
+  barcode?: string;
+  ingredients?: ParsedIngredient[];
+  servingSize?: string;
+  brand?: string;
+  productName?: string;
+  nutritionFacts?: NutritionFacts;
+  warnings?: string[];
+  processingTime?: number;
+}
+
+export const SMART_SCAN_STEPS = [
+  'idle',
+  'scanning_barcode',
+  'ocr',
+  'manual_correction',
+  'analyzing',
+  'searching',
+  'done',
+  'error',
+] as const;
+export type SmartScanStep = (typeof SMART_SCAN_STEPS)[number];
+
+export const SMART_SCAN_EVENTS = [
+  'START',
+  'BARCODE_SUCCEEDED',
+  'BARCODE_FAILED',
+  'BARCODE_TIMEOUT',
+  'OCR_SUCCEEDED',
+  'OCR_LOW_CONFIDENCE',
+  'OCR_FAILED',
+  'ANALYZE_RESOLVED',
+  'ANALYZE_FAILED',
+  'RESET',
+  'CANCEL',
+] as const;
+export type SmartScanEventType = (typeof SMART_SCAN_EVENTS)[number];
+
+export type ScanSource = 'camera' | 'image';
+
+// Search Types
+export interface SearchFilters {
+  category?: string[];
+  brand?: string[];
+  priceRange?: [number, number];
+  rating?: number;
+  verified?: boolean;
+  ingredients?: string[];
+}
+
+export interface SearchResult {
+  supplements: Supplement[];
+  totalCount: number;
+  suggestions: string[];
+  categories: CategoryCount[];
+  facets: SearchFacets;
+  searchTime: number;
+}
+
+export interface CategoryCount {
+  category: string;
+  count: number;
+}
+
+export interface SearchFacets {
+  brands: FacetCount[];
+  categories: FacetCount[];
+  priceRanges: FacetCount[];
+}
+
+export interface FacetCount {
+  value: string;
+  count: number;
+}
+
+export interface SearchResponse {
+  supplements: Supplement[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+  };
+  suggestions: {
+    categories: string[];
+    brands: string[];
+    popularSearches: string[];
+  };
+  searchMeta: {
+    query: string;
+    filters: {
+      category?: string;
+      brand?: string;
+    };
+    resultCount: number;
+  };
+}
+
+export interface ScanHistoryResponse {
+  scans: Array<
+    Scan & {
+      supplement?: {
+        id: string;
+        name: string;
+        brand: string;
+        category: string;
+      };
+    }
+  >;
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+  };
+}
+
+// API Response Types
+export interface APIResponse<T = any> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+}
+
+export interface PaginatedResponse<T> extends APIResponse<T[]> {
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+// Rate Limiting Types
+export interface RateLimitInfo {
+  remaining: number;
+  resetTime: number;
+}
+
+// Error Types
+export interface APIError {
+  code: string;
+  message: string;
+  details?: any;
+  statusCode: number;
 }
 
 // User Types
@@ -123,7 +345,14 @@ export interface Demographics {
 
 export interface HealthGoal {
   id: string;
-  category: 'fitness' | 'immunity' | 'stress' | 'digestion' | 'inflammation' | 'skin' | 'general';
+  category:
+    | 'fitness'
+    | 'immunity'
+    | 'stress'
+    | 'digestion'
+    | 'inflammation'
+    | 'skin'
+    | 'general';
   description: string;
   priority: 'low' | 'medium' | 'high';
   targetDate?: Date;
@@ -177,96 +406,6 @@ export interface BudgetPreferences {
   maxMonthly?: number;
   currency: string;
   priorityCategories: string[];
-}
-
-// OCR Types
-export interface OCRResult {
-  text: string;
-  confidence: number;
-  ingredients: ParsedIngredient[];
-  servingSize?: string;
-  brand?: string;
-  productName?: string;
-  processingTime: number;
-}
-
-// Search Types
-export interface SearchFilters {
-  category?: string[];
-  brand?: string[];
-  priceRange?: [number, number];
-  rating?: number;
-  verified?: boolean;
-  ingredients?: string[];
-}
-
-export interface SearchResult {
-  supplements: Supplement[];
-  totalCount: number;
-  suggestions: string[];
-  categories: CategoryCount[];
-  facets: SearchFacets;
-  searchTime: number;
-}
-
-export interface CategoryCount {
-  category: string;
-  count: number;
-}
-
-export interface SearchFacets {
-  brands: FacetCount[];
-  categories: FacetCount[];
-  priceRanges: FacetCount[];
-}
-
-export interface FacetCount {
-  value: string;
-  count: number;
-}
-
-// UI Component Types
-export interface FileUploadProps {
-  onUpload: (file: File) => void;
-  maxSize?: number;
-  acceptedTypes?: string[];
-  disabled?: boolean;
-  className?: string;
-}
-
-export interface SearchProps {
-  onSearch: (query: string) => void;
-  suggestions?: string[];
-  placeholder?: string;
-  disabled?: boolean;
-  autoFocus?: boolean;
-}
-
-// API Response Types
-export interface ApiResponse<T = unknown> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  message?: string;
-  timestamp: string;
-}
-
-export interface PaginatedResponse<T> extends ApiResponse<T[]> {
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-}
-
-// Error Types
-export interface AppError {
-  code: string;
-  message: string;
-  details?: Record<string, unknown>;
-  timestamp: Date;
-  userFriendly: boolean;
 }
 
 // Tracking Types
@@ -339,110 +478,5 @@ export const POPULAR_BRANDS = [
   'New Chapter',
 ] as const;
 
-export type SupplementCategory = typeof SUPPLEMENT_CATEGORIES[number];
-export type SupplementBrand = typeof POPULAR_BRANDS[number];
-
-// API Response Types
-export interface APIResponse<T = any> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  message?: string;
-}
-
-export interface UploadResponse {
-  imageUrl: string;
-  filename: string;
-  metadata: {
-    width: number;
-    height: number;
-    format: string;
-    size: number;
-  };
-  originalName: string;
-  uploadedAt: string;
-}
-
-export interface AnalysisResponse {
-  supplementName: string;
-  brand?: string;
-  confidence: number;
-  analysis: {
-    basicIntroduction: string;
-    primaryBenefits: string;
-    rdaGuidelines: string;
-    safetyLimits: string;
-    dietarySources: string;
-    supplementForms: string;
-    usageScenarios: string;
-    risksPrecautions: string;
-  };
-  ingredients: Array<{
-    name: string;
-    amount: string;
-    unit: string;
-    dailyValue?: number;
-  }>;
-  warnings?: string[];
-  recommendations?: string[];
-  scanId: string;
-  supplementId?: string;
-  cached: boolean;
-  ocrConfidence?: number;
-}
-
-export interface SearchResponse {
-  supplements: Supplement[];
-  pagination: {
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-    hasNext: boolean;
-    hasPrev: boolean;
-  };
-  suggestions: {
-    categories: string[];
-    brands: string[];
-    popularSearches: string[];
-  };
-  searchMeta: {
-    query: string;
-    filters: {
-      category?: string;
-      brand?: string;
-    };
-    resultCount: number;
-  };
-}
-
-export interface ScanHistoryResponse {
-  scans: Array<Scan & {
-    supplement?: {
-      id: string;
-      name: string;
-      brand: string;
-      category: string;
-    };
-  }>;
-  pagination: {
-    total: number;
-    limit: number;
-    offset: number;
-    hasMore: boolean;
-  };
-}
-
-// Rate Limiting Types
-export interface RateLimitInfo {
-  remaining: number;
-  resetTime: number;
-}
-
-// Error Types
-export interface APIError {
-  code: string;
-  message: string;
-  details?: any;
-  statusCode: number;
-} 
+export type SupplementCategory = (typeof SUPPLEMENT_CATEGORIES)[number];
+export type SupplementBrand = (typeof POPULAR_BRANDS)[number];

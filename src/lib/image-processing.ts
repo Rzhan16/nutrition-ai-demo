@@ -100,7 +100,7 @@ export async function saveImageToUploads(
 /**
  * Validate image file
  */
-export function validateImageFile(file: File): { valid: boolean; error?: string } {
+export function validateImageFile(file: { size: number; type: string }): { valid: boolean; error?: string } {
   // Check file size (10MB limit)
   if (file.size > 10 * 1024 * 1024) {
     return { valid: false, error: 'File size must be less than 10MB' }

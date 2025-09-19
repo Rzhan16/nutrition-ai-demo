@@ -4,6 +4,38 @@ import { withRateLimit, RateLimitConfigs, getRateLimitHeaders } from '@/lib/rate
 import { processImageForOCR, saveImageToUploads, generateUniqueFilename, validateImageFile } from '@/lib/image-processing'
 import { imageUploadSchema } from '@/lib/validations'
 
+interface FormDataFileLike {
+  size: number
+  type: string
+  name?: string
+  arrayBuffer: () => Promise<ArrayBuffer>
+}
+
+const isFormDataFile = (value: unknown): value is FormDataFileLike => {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  const candidate = value as Partial<FormDataFileLike>
+  return (
+    typeof candidate.arrayBuffer === 'function' &&
+    typeof candidate.size === 'number' &&
+    typeof candidate.type === 'string'
+  )
+}
+
+const inferFallbackExtension = (mimeType: string): string => {
+  switch (mimeType) {
+    case 'image/png':
+      return '.png'
+    case 'image/webp':
+      return '.webp'
+    case 'image/jpeg':
+      return '.jpg'
+    default:
+      return '.bin'
+  }
+}
+
 /**
  * POST /api/upload
  * Handle multipart form data for image uploads
@@ -16,22 +48,27 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   try {
     // Parse multipart form data
     const formData = await request.formData()
-    const file = formData.get('file') as File
-    
-    if (!file) {
+    const fileEntry = formData.get('file')
+
+    if (!isFormDataFile(fileEntry)) {
       throw new Error('No file provided')
     }
-    
+
+    const originalName = typeof fileEntry.name === 'string' && fileEntry.name.trim().length
+      ? fileEntry.name
+      : `upload${inferFallbackExtension(fileEntry.type)}`
+
     // Validate file
-    const validation = validateImageFile(file)
+    imageUploadSchema.parse({ file: fileEntry })
+    const validation = validateImageFile(fileEntry)
     if (!validation.valid) {
       throw new Error(validation.error)
     }
-    
+
     // Convert File to Buffer
-    const arrayBuffer = await file.arrayBuffer()
+    const arrayBuffer = await fileEntry.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
-    
+
     // Process image for OCR
     const processedImage = await processImageForOCR(buffer, {
       maxWidth: 1920,
@@ -39,9 +76,9 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
       quality: 85,
       format: 'jpeg'
     })
-    
+
     // Generate unique filename
-    const filename = generateUniqueFilename(file.name)
+    const filename = generateUniqueFilename(originalName)
     
     // Save to uploads directory
     const imageUrl = await saveImageToUploads(
@@ -55,7 +92,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
       imageUrl,
       filename,
       metadata: processedImage.metadata,
-      originalName: file.name,
+      originalName,
       uploadedAt: new Date().toISOString()
     }, 'Image uploaded successfully')
     

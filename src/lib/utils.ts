@@ -155,6 +155,138 @@ export function normalizeText(text: string): string {
 /**
  * Calculate confidence score
  */
+
+/**
+ * Normalize barcode values into grouped format (e.g., 1234 5678 9012)
+ */
+export function formatBarcode(value: string): string {
+  const digits = value.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+  if (!digits) return '';
+  const groups: string[] = [];
+  for (let i = 0; i < digits.length; i += 4) {
+    groups.push(digits.slice(i, i + 4));
+  }
+  return groups.join(' ');
+}
+
+/**
+ * Simple performance timer utility used for UX telemetry
+ */
+export interface TimerHandle {
+  start: (key: string) => void;
+  end: (key: string) => number;
+  getAll: () => Record<string, number>;
+  reset: () => void;
+}
+
+export function createTimer(): TimerHandle {
+  const startTimes = new Map<string, number>();
+  const durations = new Map<string, number>();
+
+  const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+
+  return {
+    start: (key: string) => {
+      startTimes.set(key, now());
+    },
+    end: (key: string) => {
+      const started = startTimes.get(key);
+      const ended = now();
+      if (started === undefined) {
+        return 0;
+      }
+      const duration = ended - started;
+      durations.set(key, duration);
+      startTimes.delete(key);
+      return duration;
+    },
+    getAll: () => {
+      const result: Record<string, number> = {};
+      durations.forEach((value, key) => {
+        result[key] = value;
+      });
+      return result;
+    },
+    reset: () => {
+      startTimes.clear();
+      durations.clear();
+    },
+  };
+}
+
+/**
+ * Friendly error mapper for API codes used in Toast messaging
+ */
+export function mapApiErrorCode(code: string | undefined): string {
+  if (!code) return 'An unknown error occurred, please try again later.';
+  const normalized = code.toUpperCase();
+  switch (normalized) {
+    case 'RATE_LIMIT_EXCEEDED':
+      return 'Too many requests; please try again shortly.';
+    case 'VALIDATION_ERROR':
+      return 'Input data is invalid; please review and try again.';
+    case 'ANALYSIS_ERROR':
+      return 'Analysis service is temporarily unavailable; retry later or use offline mode.';
+    case 'NETWORK_ERROR':
+      return 'Network connection issue detected; check connectivity and retry.';
+    default:
+      return 'Service temporarily unavailable; please try again later.';
+  }
+}
+
+/**
+ * Retry helper with exponential backoff. Supports cancellation via AbortSignal.
+ */
+export interface RetryOptions {
+  retries?: number;
+  initialDelayMs?: number;
+  maxDelayMs?: number;
+  signal?: AbortSignal;
+  onRetry?: (attempt: number, error: unknown) => void;
+}
+
+export async function retryWithBackoff<T>(
+  operation: (attempt: number) => Promise<T>,
+  {
+    retries = 2,
+    initialDelayMs = 250,
+    maxDelayMs = 2000,
+    signal,
+    onRetry,
+  }: RetryOptions = {},
+): Promise<T> {
+  let attempt = 0;
+  let delay = initialDelayMs;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    if (signal?.aborted) {
+      throw new DOMException('Operation aborted', 'AbortError');
+    }
+
+    try {
+      return await operation(attempt);
+    } catch (error) {
+      if (attempt >= retries) {
+        throw error;
+      }
+      if (signal?.aborted) {
+        throw new DOMException('Operation aborted', 'AbortError');
+      }
+      if (onRetry) {
+        onRetry(attempt + 1, error);
+      }
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => resolve(), delay);
+        signal?.addEventListener('abort', () => {
+          clearTimeout(timeout);
+          reject(new DOMException('Operation aborted', 'AbortError'));
+        }, { once: true });
+      });
+      attempt += 1;
+      delay = Math.min(delay * 2, maxDelayMs);
+    }
+  }
+}
 export function calculateConfidence(
   ocrConfidence: number,
   textLength: number,

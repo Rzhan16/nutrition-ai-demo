@@ -34,7 +34,7 @@ export interface AnalysisCardProps {
  * @example
  * ```tsx
  * <AnalysisCard
- *   title="基本介绍 (Basic Introduction)"
+ *   title="Basic Introduction"
  *   content="Vitamin D3 is essential for bone health..."
  *   safetyLevel="safe"
  *   collapsible
