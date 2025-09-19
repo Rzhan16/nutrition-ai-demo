@@ -1,8 +1,23 @@
 import { z } from 'zod'
 
+type FileLikeInput = {
+  size: number
+  type: string
+}
+
+const fileLikeSchema = z.custom<FileLikeInput>((value) => {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  const candidate = value as Partial<FileLikeInput>
+  return typeof candidate.size === 'number' && typeof candidate.type === 'string'
+}, {
+  message: 'Please upload a valid image file'
+})
+
 // Image upload validation
 export const imageUploadSchema = z.object({
-  file: z.instanceof(File, { message: 'Please upload a valid image file' })
+  file: fileLikeSchema
     .refine((file) => file.size <= 10 * 1024 * 1024, 'File size must be less than 10MB')
     .refine(
       (file) => ['image/jpeg', 'image/png', 'image/webp'].includes(file.type),
@@ -109,5 +124,5 @@ export type SearchInput = z.infer<typeof searchSchema>
 export type SupplementInput = z.infer<typeof supplementSchema>
 export type UserPreferencesInput = z.infer<typeof userPreferencesSchema>
 export type APIResponse = z.infer<typeof apiResponseSchema>
-export type OCRResult = z.infer<typeof ocrResultSchema>
+export type OcrResultShape = z.infer<typeof ocrResultSchema>
 export type AIAnalysisResult = z.infer<typeof aiAnalysisSchema>

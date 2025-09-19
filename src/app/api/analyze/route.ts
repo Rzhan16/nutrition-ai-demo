@@ -5,6 +5,7 @@ import { ocrAnalysisSchema, textAnalysisSchema, aiAnalysisSchema } from '@/lib/v
 import { prisma } from '@/lib/db'
 import { mockAnalysis } from '@/lib/mock-data'
 import { z } from 'zod'
+import type { OCRResult } from '@/lib/types'
 
 /**
  * POST /api/analyze
@@ -24,10 +25,12 @@ async function performServerOCR(imageUrl: string): Promise<{ text: string; confi
     
     // For now, return mock data with realistic structure
     // In production, replace with actual OCR service
-    const mockOCRResult = {
+    const mockOCRResult: OCRResult = {
+      ok: true,
       text: "Pure Encapsulations Vitamin D3 1000 IU\nSupplement Facts\nServing Size: 1 capsule\nVitamin D3 (as cholecalciferol) 25 mcg (1000 IU) 125% DV\nOther ingredients: Cellulose, vegetarian capsule",
       confidence: 0.92,
-      barcode: undefined // Would be populated if barcode detected
+      durationMs: 0,
+      barcode: undefined,
     };
     
     return mockOCRResult;

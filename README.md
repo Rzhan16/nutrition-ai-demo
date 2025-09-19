@@ -22,6 +22,8 @@ npm run dev
 # Open http://localhost:3000
 ```
 
+如何本地快速体验：先运行 `npm install`，再执行 `npm run dev`，最后打开 http://localhost:3000/analysis。
+
 ## 🎯 Project Overview
 
 This demo application showcases an AI-powered nutrition analysis platform designed for health-conscious individuals and fitness enthusiasts. It provides instant supplement analysis through OCR scanning and database search, delivering professional-grade nutritional insights.
@@ -192,6 +194,16 @@ nutrition-ai-demo/
 - 🔄 Performance optimization
 - 🔄 Deployment to Vercel
 - 🔄 Documentation completion
+
+## 🧪 Test Scanner – Step 8
+
+- Start the dev server with `npm run dev` and open [http://localhost:3000/test-scanner](http://localhost:3000/test-scanner) to exercise the barcode → OCR → analyze → search flow.
+- Runtime flags: the scanner reads the standard `NEXT_PUBLIC_API_URL` for API routing and `NEXT_PUBLIC_OCR_LANG` for OCR language selection; no write access or new environment variables are required for this step.
+- Open the Debug Drawer via the gear icon in the top-right corner to toggle engines, force OCR, inspect raw JSON, view timing metrics, and review the last eight sessions recorded in the in-memory history list.
+- Common issues:
+  - **Camera permission denied** – the page surfaces a toast and guidance banner; grant access in the browser settings and retry.
+  - **Barcode timeout/unsupported** – switch engines from the Debug Drawer or move closer to the label to improve detection.
+  - **Low OCR confidence** – the flow automatically enters Manual Correction so you can edit the extracted text before rerunning analysis.
 
 ## 🚨 Important Disclaimers
 

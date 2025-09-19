@@ -3,8 +3,8 @@ import { withErrorHandling, createSuccessResponse } from '@/lib/error-handler'
 import { withRateLimit, RateLimitConfigs, getRateLimitHeaders } from '@/lib/rate-limiter'
 import { searchSchema } from '@/lib/validations'
 import { prisma } from '@/lib/db'
-import { db as simpleDb } from '@/lib/db-simple'
 import { mockSupplements } from '@/lib/mock-data'
+import type { ParsedIngredient, Supplement } from '@/lib/types'
 
 /**
  * GET /api/search
@@ -78,6 +78,8 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
   const { query: searchQuery, category: searchCategory, brand: searchBrand, page: currentPage, limit: pageSize } = validatedParams
   const offset = (currentPage - 1) * pageSize
   
+  const db = prisma
+
   // Build where clause for database query
   const whereClause: any = {}
   
@@ -97,13 +99,40 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
     whereClause.brand = { contains: searchBrand }
   }
   
+  const filterMockSupplements = (): { items: Supplement[]; total: number } => {
+    const filtered = mockSupplements.filter(supplement => {
+      if (searchQuery) {
+        const queryLower = searchQuery.toLowerCase()
+        return (
+          supplement.name.toLowerCase().includes(queryLower) ||
+          supplement.brand.toLowerCase().includes(queryLower) ||
+          supplement.category.toLowerCase().includes(queryLower)
+        )
+      }
+      return true
+    })
+    return {
+      items: filtered.slice(offset, offset + pageSize),
+      total: filtered.length
+    }
+  }
+
+  type RowResult = Supplement & { _count?: { scans: number } }
+
+  const normalizeIngredients = (value: unknown): ParsedIngredient[] =>
+    Array.isArray(value) ? (value as ParsedIngredient[]) : []
+
+  const getScanCount = (row: { _count?: { scans: number } } | undefined): number =>
+    row?._count?.scans ?? 0
+
   // Execute database query with fallback to mock data
-  let supplements, total
-  
-  if (prisma) {
+  let rows: RowResult[] = []
+  let total = 0
+
+  if (db) {
     try {
-      [supplements, total] = await Promise.all([
-        prisma.supplement.findMany({
+      const [dbRows, dbTotal] = await Promise.all([
+        db.supplement.findMany({
           where: whereClause,
           orderBy: [
             { verified: 'desc' }, // Verified supplements first
@@ -117,39 +146,33 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
             }
           }
         }),
-        prisma.supplement.count({ where: whereClause })
+        db.supplement.count({ where: whereClause })
       ])
-    } catch (error) {
-      // Fallback to mock data if database is not available
-      console.log('Database not available, using mock data')
-      supplements = mockSupplements.filter(supplement => {
-        if (searchQuery) {
-          return supplement.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                 supplement.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                 supplement.category.toLowerCase().includes(searchQuery.toLowerCase())
-        }
-        return true
+      const toRowResult = (row: (typeof dbRows)[number]): RowResult => ({
+        ...row,
+        imageUrl: row.imageUrl ?? undefined,
+        ingredients: normalizeIngredients(row.ingredients),
       })
-      total = supplements.length
-      supplements = supplements.slice(offset, offset + pageSize)
+      rows = dbRows.map(toRowResult)
+      total = dbTotal
+    } catch (error) {
+      console.log('Database not available, using mock data')
+      const mockResults = filterMockSupplements()
+      rows = mockResults.items as RowResult[]
+      total = mockResults.total
     }
   } else {
-    // Use mock data if prisma is not available
     console.log('Prisma not available, using mock data')
-    supplements = mockSupplements.filter(supplement => {
-      if (searchQuery) {
-        return supplement.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-               supplement.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
-               supplement.category.toLowerCase().includes(searchQuery.toLowerCase())
-      }
-      return true
-    })
-    total = supplements.length
-    supplements = supplements.slice(offset, offset + pageSize)
+    const mockResults = filterMockSupplements()
+    rows = mockResults.items as RowResult[]
+    total = mockResults.total
   }
   
+  const supplements: Supplement[] = rows.map(({ _count, ...supplement }): Supplement => supplement)
+  
   // Apply fuzzy matching and scoring
-  const scoredSupplements = supplements.map(supplement => {
+  const scoredSupplements = supplements.map((supplement, index) => {
+    const sourceRow = rows[index]
     let score = 0
     
     // Exact matches get highest score
@@ -180,7 +203,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
     }
     
     // Boost popular supplements (more scans)
-    score += Math.min(supplement._count.scans * 0.1, 2)
+    score += Math.min(getScanCount(sourceRow) * 0.1, 2)
     
     return {
       ...supplement,
@@ -192,18 +215,34 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
   scoredSupplements.sort((a, b) => b.relevanceScore - a.relevanceScore)
   
   // Get category suggestions
-  const categories = await prisma.supplement.findMany({
-    select: { category: true },
-    distinct: ['category'],
-    orderBy: { category: 'asc' }
-  })
+  const categories = db
+    ? await db.supplement.findMany({
+        select: { category: true },
+        distinct: ['category'],
+        orderBy: { category: 'asc' }
+      })
+    : Array.from(
+        new Set(
+          mockSupplements
+            .map(supplement => supplement.category)
+            .filter((category): category is string => typeof category === 'string' && category.length > 0)
+        )
+      ).map(category => ({ category }))
   
   // Get brand suggestions
-  const brands = await prisma.supplement.findMany({
-    select: { brand: true },
-    distinct: ['brand'],
-    orderBy: { brand: 'asc' }
-  })
+  const brands = db
+    ? await db.supplement.findMany({
+        select: { brand: true },
+        distinct: ['brand'],
+        orderBy: { brand: 'asc' }
+      })
+    : Array.from(
+        new Set(
+          mockSupplements
+            .map(supplement => supplement.brand)
+            .filter((brand): brand is string => typeof brand === 'string' && brand.length > 0)
+        )
+      ).map(brand => ({ brand }))
   
   // Get popular searches (mock data for now)
   const popularSearches = [
@@ -258,6 +297,11 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
 export const POST = withErrorHandling(async (request: NextRequest) => {
   // Apply rate limiting
   const rateLimitResult = withRateLimit(RateLimitConfigs.SEARCH)(request)
+  
+  const db = prisma
+  if (!db) {
+    throw new Error('Prisma client not initialized')
+  }
   
   const body = await request.json()
   const {
@@ -327,7 +371,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   
   // Execute query
   const [supplements, total] = await Promise.all([
-    prisma.supplement.findMany({
+    db.supplement.findMany({
       where: whereClause,
       orderBy,
       take: limit,
@@ -338,7 +382,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
         }
       }
     }),
-    prisma.supplement.count({ where: whereClause })
+    db.supplement.count({ where: whereClause })
   ])
   
   const response = createSuccessResponse({

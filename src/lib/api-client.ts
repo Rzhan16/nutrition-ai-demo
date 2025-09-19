@@ -1,246 +1,255 @@
-/**
- * API client utilities for making requests to our backend endpoints
- * Includes proper error handling, type safety, and rate limiting awareness
- */
+import { mapApiErrorCode, retryWithBackoff } from '@/lib/utils';
+import type {
+  AnalysisResponse,
+  APIResponse,
+  ScanHistoryResponse,
+  SearchResponse,
+  UploadResponse,
+} from '@/lib/types';
 
-import { APIResponse, UploadResponse, AnalysisResponse, SearchResponse, ScanHistoryResponse } from './types'
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
+const DEFAULT_TIMEOUT = 15_000;
 
 export class APIError extends Error {
   constructor(
     public status: number,
     public code: string,
     message: string,
-    public details?: any
+    public friendlyMessage: string,
+    public details?: unknown,
   ) {
-    super(message)
-    this.name = 'APIError'
+    super(message);
+    this.name = 'APIError';
   }
 }
 
-/**
- * Generic API request function with error handling
- */
-async function apiRequest<T>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<APIResponse<T>> {
-  const url = `${API_BASE_URL}${endpoint}`
-  
-  const defaultHeaders = {
-    'Content-Type': 'application/json',
+export interface ApiRequestOptions extends RequestInit {
+  timeoutMs?: number;
+  retries?: number;
+  retryDelayMs?: number;
+  signal?: AbortSignal;
+  description?: string;
+}
+
+function buildUrl(endpoint: string): string {
+  if (endpoint.startsWith('http')) {
+    return endpoint;
   }
-  
-  const config: RequestInit = {
-    ...options,
-    headers: {
-      ...defaultHeaders,
-      ...options.headers,
-    },
+  return `${API_BASE_URL}${endpoint}`;
+}
+
+function prepareHeaders(options: RequestInit): HeadersInit {
+  const headers = new Headers(options.headers ?? {});
+  const body = options.body;
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+  if (!isFormData && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
   }
-  
+  return headers;
+}
+
+function parseResponseBody<T>(text: string): APIResponse<T> | null {
+  if (!text) {
+    return null;
+  }
+
   try {
-    const response = await fetch(url, config)
-    const data = await response.json()
-    
-    if (!response.ok) {
-      throw new APIError(
-        response.status,
-        data.error || 'UNKNOWN_ERROR',
-        data.message || 'An error occurred',
-        data.details
-      )
-    }
-    
-    return data
+    return JSON.parse(text) as APIResponse<T>;
   } catch (error) {
-    if (error instanceof APIError) {
-      throw error
-    }
-    
-    // Network or other errors
-    throw new APIError(
-      0,
-      'NETWORK_ERROR',
-      error instanceof Error ? error.message : 'Network error occurred'
-    )
+    console.warn('Failed to parse JSON response', error);
+    return null;
   }
 }
 
-/**
- * Upload image file for analysis
- */
-export async function uploadImage(file: File): Promise<UploadResponse> {
-  const formData = new FormData()
-  formData.append('file', file)
-  
-  const response = await apiRequest<UploadResponse>('/api/upload', {
-    method: 'POST',
-    headers: {}, // Let browser set Content-Type for FormData
-    body: formData,
-  })
-  
-  return response.data as any
+function toApiError(status: number, payload: APIResponse<unknown> | null, fallbackMessage: string): APIError {
+  const code = payload?.error ?? `HTTP_${status}`;
+  const message = payload?.message ?? fallbackMessage;
+  return new APIError(status, code, message, mapApiErrorCode(code), payload?.data);
 }
 
-/**
- * Analyze image or text for supplement information
- */
-export async function analyzeSupplement(
-  input: { imageUrl: string; userId?: string } | { text: string; userId?: string }
-): Promise<AnalysisResponse> {
-  const response = await apiRequest<AnalysisResponse>('/api/analyze', {
+function toNetworkError(error: unknown): APIError {
+  if (error instanceof APIError) {
+    return error;
+  }
+
+  if (error instanceof DOMException) {
+    if (error.name === 'AbortError') {
+      return new APIError(0, 'ABORTED', 'Operation cancelled', 'The operation was cancelled.');
+    }
+    if (error.name === 'TimeoutError') {
+      return new APIError(0, 'TIMEOUT', 'Request timed out', 'The request timed out; please try again.');
+    }
+  }
+
+  const message = error instanceof Error ? error.message : 'Network request failed';
+  return new APIError(0, 'NETWORK_ERROR', message, mapApiErrorCode('NETWORK_ERROR'));
+}
+
+async function makeRequest<T>(endpoint: string, options: ApiRequestOptions = {}): Promise<T> {
+  const {
+    timeoutMs = DEFAULT_TIMEOUT,
+    retries = 1,
+    retryDelayMs = 250,
+    signal,
+    description,
+    ...fetchOptions
+  } = options;
+
+  const requestFactory = async (): Promise<T> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort(new DOMException('Request timeout', 'TimeoutError'));
+    }, timeoutMs);
+
+    const abortListener = () => {
+      controller.abort(new DOMException('Operation aborted', 'AbortError'));
+    };
+
+    if (signal) {
+      if (signal.aborted) {
+        clearTimeout(timeoutId);
+        throw new DOMException('Operation aborted', 'AbortError');
+      }
+      signal.addEventListener('abort', abortListener, { once: true });
+    }
+
+    try {
+      const response = await fetch(buildUrl(endpoint), {
+        ...fetchOptions,
+        headers: prepareHeaders(fetchOptions),
+        signal: controller.signal,
+      });
+
+      const text = await response.text();
+      const payload = parseResponseBody<T>(text);
+
+      if (!response.ok || (payload && payload.success === false)) {
+        throw toApiError(response.status, payload, response.statusText);
+      }
+
+      if (payload && payload.success !== undefined) {
+        return (payload.data ?? ({} as T)) as T;
+      }
+
+      // If there is no structured payload, attempt to cast raw response
+      return (payload ?? (text as unknown as T)) as T;
+    } catch (error) {
+      throw toNetworkError(error);
+    } finally {
+      clearTimeout(timeoutId);
+      if (signal) {
+        signal.removeEventListener('abort', abortListener);
+      }
+    }
+  };
+
+  return retryWithBackoff<T>(requestFactory, {
+    retries,
+    initialDelayMs: retryDelayMs,
+    signal,
+    onRetry: (attempt, error) => {
+      console.warn(`Retrying request${description ? ` for ${description}` : ''} (attempt ${attempt + 1})`, error);
+    },
+  });
+}
+
+export async function uploadImage(file: File, options: ApiRequestOptions = {}): Promise<UploadResponse> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  return makeRequest<UploadResponse>('/api/upload', {
+    method: 'POST',
+    body: formData,
+    ...options,
+  });
+}
+
+export type AnalyzeInput =
+  | { imageUrl: string; userId?: string }
+  | { text: string; userId?: string }
+  | { barcode: string; userId?: string };
+
+export async function analyzeSupplement(input: AnalyzeInput, options: ApiRequestOptions = {}): Promise<AnalysisResponse> {
+  return makeRequest<AnalysisResponse>('/api/analyze', {
     method: 'POST',
     body: JSON.stringify(input),
-  })
-  
-  return response.data as any
+    ...options,
+  });
 }
 
-/**
- * Search supplements in the database
- */
-export async function searchSupplements(params: {
-  query: string
-  category?: string
-  brand?: string
-  page?: number
-  limit?: number
-}): Promise<SearchResponse> {
-  const searchParams = new URLSearchParams()
-  
-  if (params.query) searchParams.set('q', params.query)
-  if (params.category) searchParams.set('category', params.category)
-  if (params.brand) searchParams.set('brand', params.brand)
-  if (params.page) searchParams.set('page', params.page.toString())
-  if (params.limit) searchParams.set('limit', params.limit.toString())
-  
-  const response = await apiRequest<SearchResponse>(`/api/search?${searchParams}`)
-  return response.data as any
+export interface SearchParams {
+  query: string;
+  category?: string;
+  brand?: string;
+  page?: number;
+  limit?: number;
 }
 
-/**
- * Advanced search with complex filters
- */
-export async function advancedSearch(params: {
-  query?: string
-  filters?: {
-    category?: string[]
-    brand?: string[]
-    verified?: boolean
-  }
-  sortBy?: 'name' | 'brand' | 'category' | 'created' | 'popularity' | 'relevance'
-  sortOrder?: 'asc' | 'desc'
-  page?: number
-  limit?: number
-}): Promise<SearchResponse> {
-  const response = await apiRequest<SearchResponse>('/api/search', {
+export async function searchSupplements(params: SearchParams, options: ApiRequestOptions = {}): Promise<SearchResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.query) searchParams.set('q', params.query);
+  if (params.category) searchParams.set('category', params.category);
+  if (params.brand) searchParams.set('brand', params.brand);
+  if (params.page) searchParams.set('page', params.page.toString());
+  if (params.limit) searchParams.set('limit', params.limit.toString());
+
+  return makeRequest<SearchResponse>(`/api/search?${searchParams.toString()}`, options);
+}
+
+export async function advancedSearch(
+  params: {
+    query?: string;
+    filters?: {
+      category?: string[];
+      brand?: string[];
+      verified?: boolean;
+    };
+    sortBy?: 'name' | 'brand' | 'category' | 'created' | 'popularity' | 'relevance';
+    sortOrder?: 'asc' | 'desc';
+    page?: number;
+    limit?: number;
+  },
+  options: ApiRequestOptions = {},
+): Promise<SearchResponse> {
+  return makeRequest<SearchResponse>('/api/search', {
     method: 'POST',
     body: JSON.stringify(params),
-  })
-  
-  return response.data!
+    ...options,
+  });
 }
 
-/**
- * Get scan history for a user
- */
-export async function getScanHistory(
-  userId: string,
-  options: { limit?: number; offset?: number } = {}
-): Promise<ScanHistoryResponse> {
-  const searchParams = new URLSearchParams()
-  searchParams.set('userId', userId)
-  
-  if (options.limit) searchParams.set('limit', options.limit.toString())
-  if (options.offset) searchParams.set('offset', options.offset.toString())
-  
-  const response = await apiRequest<ScanHistoryResponse>(`/api/analyze?${searchParams}`)
-  return response.data!
+export async function getScanHistory(userId: string, options: { limit?: number; offset?: number } = {}): Promise<ScanHistoryResponse> {
+  const searchParams = new URLSearchParams();
+  searchParams.set('userId', userId);
+  if (options.limit) searchParams.set('limit', options.limit.toString());
+  if (options.offset) searchParams.set('offset', options.offset.toString());
+
+  return makeRequest<ScanHistoryResponse>(`/api/analyze?${searchParams.toString()}`);
 }
 
-/**
- * Get upload limits and information
- */
 export async function getUploadInfo(): Promise<{
   limits: {
-    maxFileSize: string
-    allowedTypes: string[]
-    maxDimensions: string
+    maxFileSize: string;
+    allowedTypes: string[];
+    maxDimensions: string;
     processing: {
-      compression: boolean
-      optimization: boolean
-      format: string
-    }
-  }
+      compression: boolean;
+      optimization: boolean;
+      format: string;
+    };
+  };
   rateLimit: {
-    remaining: number
-    resetTime: string
-  }
+    remaining: number;
+    resetTime: string;
+  };
 }> {
-  const response = await apiRequest('/api/upload')
-  return response.data as any
+  return makeRequest('/api/upload');
 }
 
-/**
- * Utility function to check if an error is a rate limit error
- */
 export function isRateLimitError(error: unknown): boolean {
-  return error instanceof APIError && error.code === 'RATE_LIMIT_EXCEEDED'
+  return error instanceof APIError && error.code === 'RATE_LIMIT_EXCEEDED';
 }
 
-/**
- * Utility function to get remaining time until rate limit resets
- */
-export function getRateLimitResetTime(error: APIError): Date | null {
-  if (isRateLimitError(error) && error.details?.resetTime) {
-    return new Date(error.details.resetTime)
-  }
-  return null
-}
-
-/**
- * Retry function with exponential backoff for rate-limited requests
- */
-export async function withRetry<T>(
-  fn: () => Promise<T>,
-  maxRetries: number = 3,
-  baseDelay: number = 1000
-): Promise<T> {
-  let lastError: Error
-  
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn()
-    } catch (error) {
-      lastError = error as Error
-      
-      if (error instanceof APIError && isRateLimitError(error)) {
-        const resetTime = getRateLimitResetTime(error)
-        if (resetTime) {
-          const waitTime = resetTime.getTime() - Date.now()
-          if (waitTime > 0) {
-            await new Promise(resolve => setTimeout(resolve, waitTime))
-            continue
-          }
-        }
-      }
-      
-      if (attempt === maxRetries) {
-        throw lastError
-      }
-      
-      // Exponential backoff
-      const delay = baseDelay * Math.pow(2, attempt)
-      await new Promise(resolve => setTimeout(resolve, delay))
-    }
-  }
-  
-  throw lastError!
-}
-
-// Export the API client instance
 export const apiClient = {
   uploadImage,
   analyzeSupplement,
@@ -248,7 +257,4 @@ export const apiClient = {
   advancedSearch,
   getScanHistory,
   getUploadInfo,
-  withRetry,
-  isRateLimitError,
-  getRateLimitResetTime,
-}
+};
