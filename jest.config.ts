@@ -7,10 +7,23 @@ const config: Config = {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
   transform: {
-    '^.+\\.(t|j)sx?$': ['ts-jest', { tsconfig: 'tsconfig.json' }],
+    '^.+\\.(t|j)sx?$': ['ts-jest', { 
+      tsconfig: 'tsconfig.json',
+      useESM: true
+    }],
   },
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   testPathIgnorePatterns: ['/node_modules/', '/.next/', '/e2e/'],
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
+  transformIgnorePatterns: [
+    'node_modules/(?!(tesseract\\.js|@zxing|html5-qrcode|quagga)/)'
+  ],
+  globals: {
+    'ts-jest': {
+      useESM: true
+    }
+  },
+  testTimeout: 10000,
 };
 
 export default config;
