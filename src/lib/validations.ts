@@ -27,7 +27,16 @@ export const imageUploadSchema = z.object({
 
 // OCR analysis request validation
 export const ocrAnalysisSchema = z.object({
-  imageUrl: z.string().url('Invalid image URL'),
+  imageUrl: z.string().min(1, 'Image URL is required').refine(
+    (url) => {
+      // Allow HTTP/HTTPS URLs and blob URLs
+      return url.startsWith('http://') || 
+             url.startsWith('https://') || 
+             url.startsWith('blob:') ||
+             url.startsWith('/uploads/');
+    },
+    'Invalid image URL format'
+  ),
   userId: z.string().optional(),
 })
 

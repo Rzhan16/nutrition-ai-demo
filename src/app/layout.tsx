@@ -4,6 +4,7 @@ import './globals.css';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
+import { ClientBodyWrapper } from '@/components/layout/ClientBodyWrapper';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -103,16 +104,21 @@ export default function RootLayout({
         <meta name="msapplication-TileColor" content="#2563eb" />
         <meta name="msapplication-tap-highlight" content="no" />
       </head>
-      <body className="font-sans antialiased min-h-screen bg-background text-foreground">
-        <ErrorBoundary>
-          <div className="relative flex min-h-screen flex-col">
-            <Header />
-            <main className="flex-1">
-              {children}
-            </main>
-            <Footer />
-          </div>
-        </ErrorBoundary>
+      <body 
+        className="font-sans antialiased min-h-screen bg-background text-foreground"
+        suppressHydrationWarning={true}
+      >
+        <ClientBodyWrapper className="font-sans antialiased min-h-screen bg-background text-foreground">
+          <ErrorBoundary>
+            <div className="relative flex min-h-screen flex-col">
+              <Header />
+              <main className="flex-1">
+                {children}
+              </main>
+              <Footer />
+            </div>
+          </ErrorBoundary>
+        </ClientBodyWrapper>
       </body>
     </html>
   );

@@ -21,13 +21,13 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SearchBox } from './SearchBox';
-import { searchService } from '@/lib/search';
+import { searchSupplements } from '@/lib/api-client';
 import { barcodeService } from '@/lib/barcode';
 import type { 
   SearchFilters, 
   SearchResult as SearchResultType, 
   Supplement,
-  BarcodeResult 
+  BarcodeScanResult 
 } from '@/lib/types';
 
 interface SearchInterfaceProps {
@@ -165,11 +165,27 @@ export function SearchInterface({
 
     setLoading(true);
     try {
-      const result = await searchService.searchSupplements(
+      const response = await searchSupplements({
         query,
-        filters,
-        { page, limit: 20, sortBy, sortOrder }
-      );
+        category: filters.category?.[0],
+        brand: filters.brand?.[0],
+        page,
+        limit: 20
+      });
+      
+      // Convert API response to expected SearchResult format
+      const result: SearchResultType = {
+        supplements: response.supplements,
+        totalCount: response.pagination.total,
+        suggestions: response.suggestions.popularSearches || [],
+        categories: [], // We don't have this in the API response
+        facets: {
+          brands: response.suggestions.brands.map(brand => ({ value: brand, count: 0 })),
+          categories: response.suggestions.categories.map(cat => ({ value: cat, count: 0 })),
+          priceRanges: []
+        },
+        searchTime: 0
+      };
       
       setSearchResults(result);
       setCurrentPage(page);
@@ -216,7 +232,7 @@ export function SearchInterface({
       await barcodeService.initializeScanner();
       
       barcodeService.startScanning(
-        (result: BarcodeResult) => {
+        (result: BarcodeScanResult) => {
           if (result.productInfo?.name) {
             setSearchQuery(result.productInfo.name);
             performSearch(result.productInfo.name);

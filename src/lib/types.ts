@@ -159,7 +159,7 @@ export interface OCRWord {
   bbox?: OCRBoundingBox;
 }
 
-export type OCRErrorCode = 'ocr_failed' | 'ocr_low_confidence' | 'ocr_timeout' | 'analyze_failed' | 'search_failed';
+export type OCRErrorCode = 'ocr_failed' | 'ocr_low_confidence' | 'ocr_timeout' | 'ocr_aborted' | 'analyze_failed' | 'search_failed';
 
 export interface OCRResult {
   ok: boolean;
@@ -180,6 +180,15 @@ export interface OCRResult {
   nutritionFacts?: NutritionFacts;
   warnings?: string[];
   processingTime?: number;
+  qualityMetrics?: {
+    confidence: number;
+    wordCount: number;
+    avgWordConfidence: number;
+    textLength: number;
+    hasNutritionKeywords: boolean;
+    hasNumericData: boolean;
+    qualityScore: number;
+  };
 }
 
 export const SMART_SCAN_STEPS = [
