@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { withErrorHandling, createSuccessResponse } from '@/lib/error-handler'
 import { withRateLimit, RateLimitConfigs, getRateLimitHeaders } from '@/lib/rate-limiter'
 import { searchSchema } from '@/lib/validations'
@@ -55,6 +56,7 @@ function levenshteinDistance(str1: string, str2: string): number {
   return matrix[str2.length][str1.length]
 }
 
+
 export const GET = withErrorHandling(async (request: NextRequest) => {
   // Apply rate limiting
   const rateLimitResult = withRateLimit(RateLimitConfigs.SEARCH)(request)
@@ -79,16 +81,38 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
   const offset = (currentPage - 1) * pageSize
   
   const db = prisma
+  let dbHealthy = Boolean(db)
 
   // Build where clause for database query
   const whereClause: any = {}
   
   if (searchQuery) {
-    whereClause.OR = [
-      { name: { contains: searchQuery } },
-      { brand: { contains: searchQuery } },
-      { category: { contains: searchQuery } }
-    ]
+    const normalizedQuery = searchQuery.trim()
+    if (normalizedQuery.length > 0) {
+      const orConditions = [
+        { name: { contains: normalizedQuery } },
+        { brand: { contains: normalizedQuery } },
+        { category: { contains: normalizedQuery } }
+      ]
+
+      const terms = normalizedQuery.split(/\s+/).filter(Boolean)
+      if (terms.length > 1) {
+        terms.forEach((term) => {
+          orConditions.push({
+            OR: [
+              { name: { contains: term } },
+              { brand: { contains: term } },
+              { category: { contains: term } }
+            ]
+          })
+        })
+      }
+
+      whereClause.OR = [
+        ...(Array.isArray(whereClause.OR) ? whereClause.OR : []),
+        ...orConditions
+      ]
+    }
   }
   
   if (searchCategory) {
@@ -129,25 +153,25 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
   let rows: RowResult[] = []
   let total = 0
 
-  if (db) {
+  if (dbHealthy && db) {
     try {
-      const [dbRows, dbTotal] = await Promise.all([
-        db.supplement.findMany({
-          where: whereClause,
-          orderBy: [
-            { verified: 'desc' }, // Verified supplements first
-            { createdAt: 'desc' }
-          ],
-          take: pageSize,
-          skip: offset,
-          include: {
-            _count: {
-              select: { scans: true }
-            }
+      const dbRows = await db.supplement.findMany({
+        where: whereClause,
+        orderBy: [
+          { verified: 'desc' },
+          { createdAt: 'desc' }
+        ],
+        take: pageSize,
+        skip: offset,
+        include: {
+          _count: {
+            select: { scans: true }
           }
-        }),
-        db.supplement.count({ where: whereClause })
-      ])
+        }
+      })
+
+      const dbTotal = await db.supplement.count({ where: whereClause })
+
       const toRowResult = (row: (typeof dbRows)[number]): RowResult => ({
         ...row,
         imageUrl: row.imageUrl ?? undefined,
@@ -155,20 +179,31 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
       })
       rows = dbRows.map(toRowResult)
       total = dbTotal
+      dbHealthy = true
     } catch (error) {
-      console.log('Database not available, using mock data')
+      if (shouldDisablePrisma(error)) {
+        dbHealthy = false
+        console.info('Prisma schema not ready; using mock supplement data instead.')
+      } else {
+        console.warn('Database not available, using mock data', error)
+      }
       const mockResults = filterMockSupplements()
       rows = mockResults.items as RowResult[]
       total = mockResults.total
+      dbHealthy = false
     }
   } else {
-    console.log('Prisma not available, using mock data')
     const mockResults = filterMockSupplements()
     rows = mockResults.items as RowResult[]
     total = mockResults.total
+    dbHealthy = false
   }
   
-  const supplements: Supplement[] = rows.map(({ _count, ...supplement }): Supplement => supplement)
+  const supplements: Supplement[] = rows.map((row): Supplement => {
+    const { _count, ...supplement } = row
+    void _count
+    return supplement
+  })
   
   // Apply fuzzy matching and scoring
   const scoredSupplements = supplements.map((supplement, index) => {
@@ -215,12 +250,24 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
   scoredSupplements.sort((a, b) => b.relevanceScore - a.relevanceScore)
   
   // Get category suggestions
-  const categories = db
+  const categoriesResult = dbHealthy && db
     ? await db.supplement.findMany({
         select: { category: true },
         distinct: ['category'],
         orderBy: { category: 'asc' }
+      }).catch((error) => {
+        if (shouldDisablePrisma(error)) {
+          dbHealthy = false
+          console.info('Prisma categories unavailable; using mock categories instead.')
+          return null
+        }
+        console.warn('Falling back to mock categories', error)
+        return null
       })
+    : null
+
+  const categories = categoriesResult
+    ? categoriesResult
     : Array.from(
         new Set(
           mockSupplements
@@ -228,14 +275,26 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
             .filter((category): category is string => typeof category === 'string' && category.length > 0)
         )
       ).map(category => ({ category }))
-  
+
   // Get brand suggestions
-  const brands = db
+  const brandsResult = dbHealthy && db
     ? await db.supplement.findMany({
         select: { brand: true },
         distinct: ['brand'],
         orderBy: { brand: 'asc' }
+      }).catch((error) => {
+        if (shouldDisablePrisma(error)) {
+          dbHealthy = false
+          console.info('Prisma brands unavailable; using mock brands instead.')
+          return null
+        }
+        console.warn('Falling back to mock brands', error)
+        return null
       })
+    : null
+
+  const brands = brandsResult
+    ? brandsResult
     : Array.from(
         new Set(
           mockSupplements
@@ -289,6 +348,15 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
   
   return response
 })
+
+function shouldDisablePrisma(error: unknown): boolean {
+  return Boolean(
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as Prisma.PrismaClientKnownRequestError).code === 'P2021'
+  )
+}
 
 /**
  * POST /api/search

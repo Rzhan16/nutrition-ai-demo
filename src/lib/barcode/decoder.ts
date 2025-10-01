@@ -1,6 +1,5 @@
 import type { BarcodeScanResult, BarcodeEngineOption, BarcodeFormat } from '@/lib/types';
 import { getBarcodeConfig } from './config';
-import type { BarcodeDecodeOptions } from './types';
 import { BarcodeService, resolveEngines } from './service';
 import { nowMs } from './utils';
 import { BarcodeCameraController, type CameraStartOptions, type RoiOptions } from './camera';

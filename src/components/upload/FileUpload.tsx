@@ -1,9 +1,9 @@
 'use client';
 
+/* eslint-disable @next/next/no-img-element */
+
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Upload, X, RotateCw, ZoomIn, ZoomOut, CheckCircle, AlertTriangle, Crop, Loader2 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import * as Progress from '@radix-ui/react-progress';
+import { Upload, X, RotateCw, ZoomIn, ZoomOut, CheckCircle, AlertTriangle } from 'lucide-react';
 import { cn, formatFileSize, isValidFileType } from '@/lib/utils';
 
 /**
@@ -175,7 +175,7 @@ export function FileUpload({
   }, []);
 
   // Cleanup effect for preview URL
-  React.useEffect(() => {
+  useEffect(() => {
     return () => {
       if (previewUrl) {
         URL.revokeObjectURL(previewUrl);

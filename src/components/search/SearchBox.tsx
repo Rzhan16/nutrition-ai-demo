@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Search, X, Clock, TrendingUp, Loader2 } from 'lucide-react';
 import { cn, debounce } from '@/lib/utils';
 
@@ -39,6 +39,15 @@ interface SearchSuggestion {
   frequency?: number;
 }
 
+const TRENDING_SUGGESTIONS: SearchSuggestion[] = [
+  { id: '1', text: 'Vitamin D3', type: 'trending', frequency: 95 },
+  { id: '2', text: 'Magnesium', type: 'trending', frequency: 87 },
+  { id: '3', text: 'Omega-3', type: 'trending', frequency: 82 },
+  { id: '4', text: 'Vitamin B12', type: 'trending', frequency: 78 },
+  { id: '5', text: 'Probiotics', type: 'trending', frequency: 72 },
+  { id: '6', text: 'Multivitamin', type: 'trending', frequency: 68 },
+];
+
 /**
  * Medical-grade search component with auto-complete and accessibility
  * Implements .cursorrules UX standards for supplement database search
@@ -74,25 +83,17 @@ export function SearchBox({
   const searchId = React.useId();
 
   // Popular supplements for trending suggestions
-  const trendingSuggestions: SearchSuggestion[] = [
-    { id: '1', text: 'Vitamin D3', type: 'trending', frequency: 95 },
-    { id: '2', text: 'Magnesium', type: 'trending', frequency: 87 },
-    { id: '3', text: 'Omega-3', type: 'trending', frequency: 82 },
-    { id: '4', text: 'Vitamin B12', type: 'trending', frequency: 78 },
-    { id: '5', text: 'Probiotics', type: 'trending', frequency: 72 },
-    { id: '6', text: 'Multivitamin', type: 'trending', frequency: 68 },
-  ];
-
   /**
    * Debounced search function following .cursorrules performance standards
    */
-  const debouncedSearch = useCallback(
-    debounce((searchQuery: string) => {
-      if (searchQuery.trim()) {
-        onSearch(searchQuery.trim());
-      }
-    }, debounceDelay),
-    [onSearch, debounceDelay]
+  const debouncedSearch = useMemo(
+    () =>
+      debounce((searchQuery: string) => {
+        if (searchQuery.trim()) {
+          onSearch(searchQuery.trim());
+        }
+      }, debounceDelay),
+    [onSearch, debounceDelay],
   );
 
   /**
@@ -103,7 +104,7 @@ export function SearchBox({
     if (!query.trim()) {
       // Show recent searches and trending when no query
       const recentSearches = searchHistory.slice(0, 3);
-      const trending = trendingSuggestions.slice(0, maxSuggestions - recentSearches.length);
+      const trending = TRENDING_SUGGESTIONS.slice(0, maxSuggestions - recentSearches.length);
       return [...recentSearches, ...trending];
     }
 
@@ -130,7 +131,7 @@ export function SearchBox({
     });
 
     // Add matching trending items
-    trendingSuggestions.forEach((item) => {
+    TRENDING_SUGGESTIONS.forEach((item) => {
       if (item.text.toLowerCase().includes(queryLower) && 
           !filtered.some(f => f.text.toLowerCase() === item.text.toLowerCase())) {
         filtered.push(item);
@@ -328,6 +329,7 @@ export function SearchBox({
           )}
           aria-label="Search supplements, brands, or ingredients"
           aria-expanded={isOpen}
+          aria-controls={`${searchId}-listbox`}
           aria-haspopup="listbox"
           aria-activedescendant={
             activeSuggestionIndex >= 0 
@@ -353,6 +355,7 @@ export function SearchBox({
       {isOpen && (
         <div
           ref={listboxRef}
+          id={`${searchId}-listbox`}
           className={cn(
             'absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg',
             'max-h-80 overflow-y-auto',

@@ -5,12 +5,7 @@
  * Tests all implemented backend infrastructure components
  */
 
-const https = require('https');
 const http = require('http');
-const fs = require('fs');
-const path = require('path');
-
-const BASE_URL = 'http://localhost:3000';
 
 // ANSI colors for console output
 const colors = {
@@ -54,7 +49,7 @@ class TestRunner {
           try {
             const jsonBody = JSON.parse(body);
             resolve({ status: res.statusCode, data: jsonBody, headers: res.headers });
-          } catch (e) {
+          } catch {
             resolve({ status: res.statusCode, data: body, headers: res.headers });
           }
         });

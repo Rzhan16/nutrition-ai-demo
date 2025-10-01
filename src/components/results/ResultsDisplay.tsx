@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { Grid3X3, List, Download, Share, Eye, GitCompare } from 'lucide-react';
+import { Grid3X3, List, Download, Share, GitCompare } from 'lucide-react';
 import { GridView } from './GridView';
 import { ListView } from './ListView';
 import { QuickPreview } from './QuickPreview';

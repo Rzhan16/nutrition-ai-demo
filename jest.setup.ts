@@ -77,7 +77,7 @@ jest.mock('@zxing/browser', () => ({
 
 // Mock Quagga
 jest.mock('quagga', () => ({
-  init: jest.fn((config: any, callback: (error: any) => void) => callback(null)),
+  init: jest.fn((config: unknown, callback: (error: Error | null) => void) => callback(null)),
   start: jest.fn(),
   stop: jest.fn(),
   onDetected: jest.fn(),

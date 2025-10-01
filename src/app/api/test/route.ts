@@ -4,7 +4,7 @@ import { NextRequest } from 'next/server'
  * Simple test endpoint to verify Vercel deployment is working
  */
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   return Response.json({
     success: true,
     message: 'Backend API is working!',
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
       data: body,
       timestamp: new Date().toISOString()
     })
-  } catch (error) {
+  } catch {
     return Response.json({
       success: false,
       error: 'Invalid JSON',

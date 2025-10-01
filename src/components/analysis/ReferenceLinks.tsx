@@ -298,7 +298,7 @@ export function ReferenceLinks({
 
       {/* References List */}
       <div className="space-y-3">
-        {visibleReferences.map((reference, index) => {
+        {visibleReferences.map((reference) => {
           const typeConfig = getTypeConfig(reference.type);
           const TypeIcon = typeConfig.icon;
           const credibilityBadge = getCredibilityBadge(reference.credibilityScore);
@@ -475,8 +475,6 @@ export function QuickReference({
   format = 'author-year',
   className 
 }: QuickReferenceProps) {
-  const typeConfig = getTypeConfig(reference.type);
-  
   const formatCitation = () => {
     switch (format) {
       case 'full':

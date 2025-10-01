@@ -1,12 +1,24 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
-import type { 
-  Supplement, 
-  SearchFilters, 
-  SearchResult, 
-  CategoryCount, 
+import type {
+  Supplement,
+  SearchFilters,
+  SearchResult,
+  CategoryCount,
   SearchFacets,
-  FacetCount 
 } from '@/lib/types';
+
+type SearchOptions = {
+  page?: number;
+  limit?: number;
+  sortBy?: 'relevance' | 'name' | 'brand' | 'popularity' | 'created';
+  sortOrder?: 'asc' | 'desc';
+};
+
+type SupplementWithCounts = Supplement & { _count?: { scans: number } };
+
+type GroupedCategory = { category: string | null; _count: { category: number } };
+type GroupedBrand = { brand: string | null; _count: { brand: number } };
 
 export class SearchService {
   private cache = new Map<string, { data: SearchResult; timestamp: number }>();
@@ -16,14 +28,9 @@ export class SearchService {
    * Main search method with comprehensive filtering and relevance scoring
    */
   async searchSupplements(
-    query: string, 
+    query: string,
     filters?: SearchFilters,
-    options: {
-      page?: number;
-      limit?: number;
-      sortBy?: 'relevance' | 'name' | 'brand' | 'popularity' | 'created';
-      sortOrder?: 'asc' | 'desc';
-    } = {}
+    options: SearchOptions = {}
   ): Promise<SearchResult> {
     const cacheKey = this.buildCacheKey(query, filters, options);
     const cached = this.getFromCache(cacheKey);
@@ -56,14 +63,17 @@ export class SearchService {
       ]);
 
       // Calculate relevance scores and re-sort if needed
-      const scoredSupplements = supplements.map((supplement: any) => ({
-        ...supplement,
-        relevanceScore: this.calculateRelevanceScore(supplement, query)
-      }));
+      const scoredSupplements: SupplementWithCounts[] = supplements.map((supplement) => {
+        const withScore: SupplementWithCounts = {
+          ...(supplement as SupplementWithCounts),
+          relevanceScore: this.calculateRelevanceScore(supplement as Supplement, query),
+        };
+        return withScore;
+      });
 
       if (sortBy === 'relevance') {
-        scoredSupplements.sort((a: any, b: any) => 
-          sortOrder === 'desc' 
+        scoredSupplements.sort((a, b) =>
+          sortOrder === 'desc'
             ? (b.relevanceScore || 0) - (a.relevanceScore || 0)
             : (a.relevanceScore || 0) - (b.relevanceScore || 0)
         );
@@ -111,9 +121,9 @@ export class SearchService {
       const supplements = await prisma.supplement.findMany({
         where: {
           OR: [
-            { name: { contains: partial, mode: 'insensitive' } },
-            { brand: { contains: partial, mode: 'insensitive' } },
-            { category: { contains: partial, mode: 'insensitive' } }
+            { name: { contains: partial } },
+            { brand: { contains: partial } },
+            { category: { contains: partial } }
           ]
         },
         select: { name: true, brand: true, category: true },
@@ -121,15 +131,17 @@ export class SearchService {
       });
 
       const suggestions = new Set<string>();
-      supplements.forEach((supplement: any) => {
-        if (supplement.name.toLowerCase().includes(partial.toLowerCase())) {
-          suggestions.add(supplement.name);
+      supplements.forEach((supplement) => {
+        const { name, brand, category } = supplement;
+        const lowerPartial = partial.toLowerCase();
+        if (name?.toLowerCase().includes(lowerPartial)) {
+          suggestions.add(name);
         }
-        if (supplement.brand.toLowerCase().includes(partial.toLowerCase())) {
-          suggestions.add(supplement.brand);
+        if (brand?.toLowerCase().includes(lowerPartial)) {
+          suggestions.add(brand);
         }
-        if (supplement.category.toLowerCase().includes(partial.toLowerCase())) {
-          suggestions.add(supplement.category);
+        if (category?.toLowerCase().includes(lowerPartial)) {
+          suggestions.add(category);
         }
       });
 
@@ -176,8 +188,7 @@ export class SearchService {
       const supplements = await prisma.supplement.findMany({
         where: {
           category: {
-            equals: category,
-            mode: 'insensitive'
+            equals: category
           }
         },
         include: {
@@ -225,10 +236,18 @@ export class SearchService {
         })
       ]);
 
+      const popularCategories = categories
+        .map((category) => category.category)
+        .filter((value): value is string => typeof value === 'string');
+
+      const topBrands = brands
+        .map((brand) => brand.brand)
+        .filter((value): value is string => typeof value === 'string');
+
       return {
-        popularCategories: categories.map((c: any) => c.category),
+        popularCategories,
         recentSearches: [], // Would need search history tracking
-        topBrands: brands.map((b: any) => b.brand)
+        topBrands,
       };
     } catch (error) {
       console.error('Trending data error:', error);
@@ -243,23 +262,23 @@ export class SearchService {
   /**
    * Build search query with filters
    */
-  private buildSearchQuery(query: string, filters?: SearchFilters): any {
-    const where: any = {};
+  private buildSearchQuery(query: string, filters?: SearchFilters): Prisma.SupplementWhereInput {
+    const where: Prisma.SupplementWhereInput = {};
 
     // Text search across name, brand, category
     if (query && query.trim()) {
       const searchTerms = query.trim().split(/\s+/);
       where.OR = [
         // Exact matches get highest priority
-        { name: { contains: query, mode: 'insensitive' } },
-        { brand: { contains: query, mode: 'insensitive' } },
-        { category: { contains: query, mode: 'insensitive' } },
+        { name: { contains: query } },
+        { brand: { contains: query } },
+        { category: { contains: query } },
         // Individual word matches
         ...searchTerms.map(term => ({
           OR: [
-            { name: { contains: term, mode: 'insensitive' } },
-            { brand: { contains: term, mode: 'insensitive' } },
-            { category: { contains: term, mode: 'insensitive' } }
+            { name: { contains: term } },
+            { brand: { contains: term } },
+            { category: { contains: term } }
           ]
         }))
       ];
@@ -354,7 +373,10 @@ export class SearchService {
   /**
    * Build order by clause for sorting
    */
-  private buildOrderBy(sortBy: string, sortOrder: 'asc' | 'desc'): any {
+  private buildOrderBy(
+    sortBy: string,
+    sortOrder: 'asc' | 'desc'
+  ): Prisma.SupplementOrderByWithRelationInput | Prisma.SupplementOrderByWithRelationInput[] {
     switch (sortBy) {
       case 'name':
         return { name: sortOrder };
@@ -377,7 +399,7 @@ export class SearchService {
   /**
    * Get category counts for faceted search
    */
-  private async getCategoryCounts(searchQuery: any): Promise<CategoryCount[]> {
+  private async getCategoryCounts(searchQuery: Prisma.SupplementWhereInput): Promise<CategoryCount[]> {
     try {
       const categories = await prisma.supplement.groupBy({
         by: ['category'],
@@ -386,10 +408,12 @@ export class SearchService {
         orderBy: { _count: { category: 'desc' } }
       });
 
-      return categories.map((cat: any) => ({
-        category: cat.category,
-        count: cat._count.category
-      }));
+      return categories
+        .filter((category): category is GroupedCategory & { category: string } => typeof category.category === 'string')
+        .map((category) => ({
+          category: category.category,
+          count: category._count.category,
+        }));
     } catch (error) {
       console.error('Category counts error:', error);
       return [];
@@ -399,7 +423,7 @@ export class SearchService {
   /**
    * Get search facets for filtering
    */
-  private async getSearchFacets(searchQuery: any): Promise<SearchFacets> {
+  private async getSearchFacets(searchQuery: Prisma.SupplementWhereInput): Promise<SearchFacets> {
     try {
       const [brands, categories] = await Promise.all([
         prisma.supplement.groupBy({
@@ -419,8 +443,12 @@ export class SearchService {
       ]);
 
       return {
-        brands: brands.map((b: any) => ({ value: b.brand, count: b._count.brand })),
-        categories: categories.map((c: any) => ({ value: c.category, count: c._count.category })),
+        brands: brands
+          .filter((brand): brand is GroupedBrand & { brand: string } => typeof brand.brand === 'string')
+          .map((brand) => ({ value: brand.brand, count: brand._count.brand })),
+        categories: categories
+          .filter((category): category is GroupedCategory & { category: string } => typeof category.category === 'string')
+          .map((category) => ({ value: category.category, count: category._count.category })),
         priceRanges: [] // Would need price data
       };
     } catch (error) {
@@ -432,7 +460,7 @@ export class SearchService {
   /**
    * Cache management
    */
-  private buildCacheKey(query: string, filters?: SearchFilters, options?: any): string {
+  private buildCacheKey(query: string, filters?: SearchFilters, options?: SearchOptions): string {
     return JSON.stringify({ query, filters, options });
   }
 

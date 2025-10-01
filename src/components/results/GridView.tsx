@@ -1,5 +1,7 @@
 'use client';
 
+/* eslint-disable @next/next/no-img-element */
+
 import React from 'react';
 import { InfiniteScroll } from './InfiniteScroll';
 import type { Supplement } from '@/lib/types';
@@ -32,12 +34,16 @@ export function GridView({
             className="bg-white border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
             onClick={() => onSupplementClick(supplement)}
           >
-            {supplement.imageUrl && (
+            {supplement.imageUrl ? (
               <img
                 src={supplement.imageUrl}
                 alt={supplement.name}
                 className="w-full h-32 object-cover rounded mb-3"
               />
+            ) : (
+              <div className="w-full h-32 rounded mb-3 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-xs font-medium text-gray-500">
+                No image available
+              </div>
             )}
             
             <h3 className="font-medium text-gray-900 line-clamp-2 mb-2">

@@ -93,15 +93,10 @@ Each supplement receives a comprehensive 8-point analysis:
 
 3. **Set up environment variables**
    ```bash
-   cp .env.example .env.local
+   cp .env.local.example .env.local
    ```
-   
-   Update `.env.local` with your configuration:
-   ```env
-   OPENAI_API_KEY=your_openai_api_key_here
-   DATABASE_URL="file:./dev.db"
-   NEXT_PUBLIC_APP_URL=http://localhost:3000
-   ```
+
+   Update `.env.local` with your configuration. Keep API keys (NIH, OpenAI, etc.) in this untracked file so they never reach Git history.
 
 4. **Run the development server**
    ```bash
@@ -117,6 +112,16 @@ Each supplement receives a comprehensive 8-point analysis:
 npm run build
 npm start
 ```
+
+### Secret Scanning
+
+Before committing, run the lightweight secret scanner to double-check that no keys have slipped into tracked files:
+
+```bash
+npm run check:secrets
+```
+
+You can wire this up to a local git hook (for example, `pre-commit`) if you’d like the scan to run automatically.
 
 ## 📁 Project Structure
 

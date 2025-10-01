@@ -41,9 +41,6 @@ export async function processImageForOCR(
   } = options
 
   try {
-    // Get original metadata
-    const originalMetadata = await sharp(fileBuffer).metadata()
-    
     // Process image for better OCR results
     const processedBuffer = await sharp(fileBuffer)
       .resize(maxWidth, maxHeight, {

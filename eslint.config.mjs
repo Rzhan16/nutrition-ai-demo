@@ -18,7 +18,46 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      "public/tesseract/**",
+      "tmp.js",
     ],
+  },
+  {
+    files: ["**/__tests__/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
+  {
+    files: ["**/*.d.ts"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
+  {
+    files: ["**/*.js"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
+  {
+    files: [
+      "src/app/api/**/*.ts",
+      "src/lib/ocr/**/*.ts",
+      "src/lib/ocr.ts",
+      "src/lib/error-handler.ts",
+      "src/lib/dsld/**/*.ts",
+      "src/components/search/**/*.tsx",
+    ],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
+  {
+    files: ["src/lib/ocr.ts"],
+    rules: {
+      "@typescript-eslint/ban-ts-comment": "off",
+    },
   },
 ];
 

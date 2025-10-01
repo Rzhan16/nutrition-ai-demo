@@ -13,6 +13,8 @@
 
 'use client';
 
+/* eslint-disable @next/next/no-img-element */
+
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { 
   Camera, 
@@ -30,7 +32,6 @@ import {
 import type { OCRResult } from '@/lib/types';
 import { barcodeService, BarcodeResult } from '@/lib/barcode';
 import { enhancedOcrService, type EnhancedOcrOptions } from '@/lib/ocr/enhanced-service';
-import { fileToCanvas } from '@/lib/ocr/preprocess';
 
 interface OptimizedOCRProcessorProps {
   onResult: (result: OCRResult | BarcodeResult) => void;
@@ -102,11 +103,35 @@ export function OptimizedOCRProcessor({
   const [isUsingCamera, setIsUsingCamera] = useState<boolean>(false);
   const [cameraError, setCameraError] = useState<string>('');
 
-  // Cleanup resources on unmount
-  useEffect(() => {
-    return () => {
-      cleanupResources();
-    };
+  const stopCamera = useCallback(() => {
+    try {
+      if (frameLoopRef.current !== null) {
+        cancelAnimationFrame(frameLoopRef.current);
+        frameLoopRef.current = null;
+      }
+
+      const currentStream = streamRef.current;
+      if (currentStream) {
+        currentStream.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+
+      setIsUsingCamera(false);
+      setCameraError('');
+
+      if (videoRef.current) {
+        try {
+          videoRef.current.pause();
+          videoRef.current.srcObject = null;
+        } catch (pauseError) {
+          console.warn('Video pause failed:', pauseError);
+        }
+      }
+
+      barcodeService.stopScanning();
+    } catch (error) {
+      console.warn('Error stopping camera:', error);
+    }
   }, []);
 
   const cleanupResources = useCallback(() => {
@@ -127,7 +152,10 @@ export function OptimizedOCRProcessor({
     } catch (error) {
       console.warn('Error during cleanup:', error);
     }
-  }, [previewImage]);
+  }, [previewImage, stopCamera]);
+
+  // Cleanup resources on unmount
+  useEffect(() => () => cleanupResources(), [cleanupResources]);
 
   const updateProgress = useCallback((
     stage: ProcessingState['stage'], 
@@ -305,47 +333,17 @@ export function OptimizedOCRProcessor({
       abortControllerRef.current = null;
     }
   }, [
-    scanMode, 
-    enableBarcode, 
-    maxRetries, 
-    qualityThreshold, 
+    scanMode,
+    enableBarcode,
+    maxRetries,
+    qualityThreshold,
     enableAdvancedPreprocessing,
-    onResult, 
-    onError, 
+    onResult,
+    onError,
     processingState.isProcessing,
-    updateProgress
+    stopCamera,
+    updateProgress,
   ]);
-
-  const stopCamera = useCallback(() => {
-    try {
-      if (frameLoopRef.current !== null) {
-        cancelAnimationFrame(frameLoopRef.current);
-        frameLoopRef.current = null;
-      }
-      
-      const currentStream = streamRef.current;
-      if (currentStream) {
-        currentStream.getTracks().forEach(track => track.stop());
-        streamRef.current = null;
-      }
-      
-      setIsUsingCamera(false);
-      setCameraError('');
-      
-      if (videoRef.current) {
-        try {
-          videoRef.current.pause();
-          videoRef.current.srcObject = null;
-        } catch (pauseError) {
-          console.warn('Video pause failed:', pauseError);
-        }
-      }
-      
-      barcodeService.stopScanning();
-    } catch (error) {
-      console.warn('Error stopping camera:', error);
-    }
-  }, []);
 
   const startCamera = useCallback(async () => {
     setCameraError('');

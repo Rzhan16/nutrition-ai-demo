@@ -37,8 +37,6 @@ export interface FooterProps {
   className?: string;
   /** Whether to show the medical disclaimer */
   showDisclaimer?: boolean;
-  /** Whether to show social links */
-  showSocial?: boolean;
   /** Custom disclaimer text */
   disclaimerText?: string;
 }
@@ -93,7 +91,6 @@ const footerSections: FooterSection[] = [
  * ```tsx
  * <Footer 
  *   showDisclaimer
- *   showSocial
  *   disclaimerText="Custom medical disclaimer text"
  * />
  * ```
@@ -101,7 +98,6 @@ const footerSections: FooterSection[] = [
 export function Footer({
   className,
   showDisclaimer = true,
-  showSocial = false,
   disclaimerText,
 }: FooterProps) {
   const currentYear = new Date().getFullYear();

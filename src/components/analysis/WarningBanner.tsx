@@ -2,14 +2,13 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { 
-  AlertTriangle, 
-  AlertCircle, 
-  Info, 
-  Shield, 
+import {
+  AlertTriangle,
+  AlertCircle,
+  Info,
   X,
   ExternalLink,
-  Phone
+  Phone,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

@@ -2,6 +2,7 @@ jest.mock('@zxing/browser', () => ({
   __esModule: true,
   BrowserMultiFormatReader: jest.fn().mockImplementation(() => ({
     getHints: jest.fn().mockReturnValue(new Map()),
+    setHints: jest.fn(),
     decodeFromCanvas: jest.fn(),
     reset: jest.fn(),
   })),
@@ -21,6 +22,10 @@ jest.mock('@zxing/library', () => ({
     CODE_128: 'CODE_128',
     CODE_39: 'CODE_39',
   },
+  DecodeHintType: {
+    TRY_HARDER: 'TRY_HARDER',
+    POSSIBLE_FORMATS: 'POSSIBLE_FORMATS',
+  },
 }));
 
 import type { BarcodeFormat } from '@/lib/types';
@@ -30,17 +35,19 @@ describe('ZXingAdapter', () => {
   const formats: BarcodeFormat[] = ['EAN13'];
 
   beforeEach(() => {
-    jest.resetAllMocks();
+    jest.clearAllMocks();
   });
 
   it('returns a scan result when ZXing succeeds', async () => {
     const adapter = new ZXingAdapter();
     const canvas = document.createElement('canvas');
     await adapter.initialize();
-    const reader = (adapter as any).reader as {
+    type MockReader = {
       decodeFromCanvas: jest.Mock;
       getHints: jest.Mock;
+      setHints: jest.Mock;
     };
+    const reader = (adapter as unknown as { reader: MockReader }).reader;
 
     reader.decodeFromCanvas.mockResolvedValue({
       getText: () => '4900000000000',
@@ -62,9 +69,7 @@ describe('ZXingAdapter', () => {
     const adapter = new ZXingAdapter();
     const canvas = document.createElement('canvas');
     await adapter.initialize();
-    const reader = (adapter as any).reader as {
-      decodeFromCanvas: jest.Mock;
-    };
+    const reader = (adapter as unknown as { reader: { decodeFromCanvas: jest.Mock } }).reader;
 
     reader.decodeFromCanvas.mockRejectedValue(new Error('timeout'));
 
@@ -76,9 +81,7 @@ describe('ZXingAdapter', () => {
     const adapter = new ZXingAdapter();
     const canvas = document.createElement('canvas');
     await adapter.initialize();
-    const reader = (adapter as any).reader as {
-      decodeFromCanvas: jest.Mock;
-    };
+    const reader = (adapter as unknown as { reader: { decodeFromCanvas: jest.Mock } }).reader;
 
     reader.decodeFromCanvas.mockResolvedValue(null);
 

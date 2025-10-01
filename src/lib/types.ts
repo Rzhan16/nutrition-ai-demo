@@ -300,7 +300,7 @@ export interface ScanHistoryResponse {
 }
 
 // API Response Types
-export interface APIResponse<T = any> {
+export interface APIResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;
@@ -326,7 +326,7 @@ export interface RateLimitInfo {
 export interface APIError {
   code: string;
   message: string;
-  details?: any;
+  details?: unknown;
   statusCode: number;
 }
 

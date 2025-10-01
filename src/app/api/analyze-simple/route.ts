@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
       message: 'Analysis completed successfully (mock data)'
     })
     
-  } catch (error) {
+  } catch {
     return Response.json({
       success: false,
       error: 'INTERNAL_ERROR',
@@ -123,7 +123,7 @@ export async function GET(request: NextRequest) {
       }
     })
     
-  } catch (error) {
+  } catch {
     return Response.json({
       success: false,
       error: 'INTERNAL_ERROR',

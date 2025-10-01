@@ -5,21 +5,42 @@ import type { BarcodeDecodeOptions, BarcodeEngineAdapter } from '../types';
 
 const ENGINE_ID = 'quagga' as const;
 
-type QuaggaJSConfig = any;
+type QuaggaDecodedCode = {
+  error?: number | null;
+};
 
-const calculateConfidence = (result: any): number => {
+type QuaggaCodeResult = {
+  code?: string;
+  format?: string;
+  decodedCodes?: QuaggaDecodedCode[] | null;
+};
+
+type QuaggaResult = {
+  codeResult?: QuaggaCodeResult | null;
+};
+
+type QuaggaJSConfig = {
+  src: string;
+  numOfWorkers: number;
+  locate: boolean;
+  decoder: {
+    readers: string[];
+  };
+};
+
+const calculateConfidence = (result: QuaggaResult | null): number => {
   try {
     const codes = result?.codeResult?.decodedCodes;
     if (!Array.isArray(codes) || codes.length === 0) {
       return 1;
     }
 
-    const valid = codes.filter((item) => typeof item.error !== 'undefined');
+    const valid = codes.filter((item) => typeof item?.error !== 'undefined');
     if (valid.length === 0) {
       return 1;
     }
 
-    const totalError = valid.reduce((sum, item) => sum + Math.abs(item.error as number), 0);
+    const totalError = valid.reduce((sum, item) => sum + Math.abs(item?.error ?? 0), 0);
     const confidence = 1 - totalError / valid.length;
     return Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : 1;
   } catch {
@@ -27,13 +48,12 @@ const calculateConfidence = (result: any): number => {
   }
 };
 
-const runDecodeSingle = (
-  config: QuaggaJSConfig,
-): Promise<any> => new Promise((resolve) => {
-  Quagga.decodeSingle(config, (result) => {
-    resolve(result ?? null);
+const runDecodeSingle = (config: QuaggaJSConfig): Promise<QuaggaResult | null> =>
+  new Promise((resolve) => {
+    Quagga.decodeSingle(config, (result) => {
+      resolve((result as QuaggaResult | undefined) ?? null);
+    });
   });
-});
 
 const createDecodeConfig = (
   dataUrl: string,

@@ -7,8 +7,6 @@
 
 const http = require('http');
 
-const BASE_URL = 'http://localhost:3000';
-
 // ANSI colors for console output
 const colors = {
   green: '\x1b[32m',
@@ -44,7 +42,7 @@ async function makeRequest(method, path, data = null) {
         try {
           const jsonBody = JSON.parse(body);
           resolve({ status: res.statusCode, data: jsonBody });
-        } catch (e) {
+        } catch {
           resolve({ status: res.statusCode, data: body });
         }
       });

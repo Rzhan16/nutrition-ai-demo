@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+# Run the secret scanner before allowing the commit.
+# Skip when running without a tty (e.g., via CI) by checking for the bypass flag.
+
+if [ -n "$SKIP_SECRET_SCAN" ]; then
+  echo "SKIP_SECRET_SCAN set; skipping secret scan."
+  exit 0
+fi
+
+echo "Running npm run check:secrets..."
+npm run check:secrets
+STATUS=$?
+
+if [ $STATUS -ne 0 ]; then
+  echo "Secret scan failed. Fix the findings or re-run with SKIP_SECRET_SCAN=1 if you really know what you're doing."
+  exit $STATUS
+fi
+
+exit 0

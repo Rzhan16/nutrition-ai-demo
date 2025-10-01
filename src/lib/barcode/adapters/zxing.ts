@@ -69,7 +69,7 @@ export class ZXingAdapter implements BarcodeEngineAdapter {
         duration,
         result,
       )
-    } catch (error) {
+    } catch {
       return null
     }
   }

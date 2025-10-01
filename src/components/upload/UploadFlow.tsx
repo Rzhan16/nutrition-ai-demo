@@ -1,25 +1,24 @@
 'use client';
 
+/* eslint-disable @next/next/no-img-element */
+
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { 
-  Upload, 
-  Camera, 
-  Image as ImageIcon, 
-  CheckCircle, 
-  AlertCircle, 
-  X, 
+import {
+  Upload,
+  Camera,
+  CheckCircle,
+  AlertCircle,
+  X,
   RotateCcw,
-  Crop,
   Loader2,
   ArrowLeft,
   ArrowRight,
   Download,
   Share,
-  Eye
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { apiClient } from '@/lib/api-client';
-import type { UploadResponse, AnalysisResponse } from '@/lib/types';
+import type { AnalysisResponse } from '@/lib/types';
 
 interface UploadFlowProps {
   onComplete?: (result: AnalysisResponse) => void;
@@ -69,11 +68,9 @@ export function UploadFlow({ onComplete, onError, className = '' }: UploadFlowPr
     saturation: 100
   });
   const [processing, setProcessing] = useState(false);
-  const [uploadResult, setUploadResult] = useState<UploadResponse | null>(null);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResponse | null>(null);
   const [processingProgress, setProcessingProgress] = useState(0);
   const [retryCount, setRetryCount] = useState(0);
-  const [showImageEditor, setShowImageEditor] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -275,13 +272,12 @@ export function UploadFlow({ onComplete, onError, className = '' }: UploadFlowPr
     try {
       // Step 1: Upload image (25%)
       setProcessingProgress(25);
-      const uploadResult = await apiClient.uploadImage(selectedFile);
-      setUploadResult(uploadResult);
+      const uploadResponse = await apiClient.uploadImage(selectedFile);
 
       // Step 2: Analyze image (50%)
       setProcessingProgress(50);
       const analysisResult = await apiClient.analyzeSupplement(
-        { imageUrl: uploadResult.imageUrl },
+        { imageUrl: uploadResponse.imageUrl },
         { timeoutMs: 30000 }
       );
 
@@ -331,11 +327,9 @@ export function UploadFlow({ onComplete, onError, className = '' }: UploadFlowPr
     setValidation(null);
     setImageEdit({ rotation: 0, contrast: 100, brightness: 100, saturation: 100 });
     setProcessing(false);
-    setUploadResult(null);
     setAnalysisResult(null);
     setProcessingProgress(0);
     setRetryCount(0);
-    setShowImageEditor(false);
     setIsUsingCamera(false);
     if (stream) {
       stream.getTracks().forEach(track => track.stop());

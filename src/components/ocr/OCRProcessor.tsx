@@ -1,7 +1,9 @@
 'use client';
 
+/* eslint-disable @next/next/no-img-element */
+
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Camera, Upload, RotateCcw, Zap, AlertCircle, CheckCircle, X } from 'lucide-react';
+import { Camera, Upload, Zap, AlertCircle, CheckCircle, X } from 'lucide-react';
 import type { OCRResult } from '@/lib/types';
 import { barcodeService, BarcodeResult } from '@/lib/barcode';
 import type { RecognizeResult } from 'tesseract.js';

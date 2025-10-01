@@ -92,9 +92,6 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
         <meta name="format-detection" content="telephone=no" />
         <meta name="application-name" content="Nutrition AI Demo" />
         <meta name="apple-mobile-web-app-capable" content="yes" />

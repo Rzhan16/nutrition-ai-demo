@@ -18,13 +18,11 @@ import { ToastProvider, useToast } from '@/components/ui/ToastProvider';
 
 function OptimizedAnalyzePage() {
   const [result, setResult] = useState<OCRResult | BarcodeResult | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
   const { showToast } = useToast();
 
   const handleResult = (ocrResult: OCRResult | BarcodeResult) => {
     console.log('🎉 OCR Result:', ocrResult);
     setResult(ocrResult);
-    setIsProcessing(false);
     
     if ('text' in ocrResult && ocrResult.text) {
       showToast({
@@ -43,7 +41,6 @@ function OptimizedAnalyzePage() {
 
   const handleError = (error: string) => {
     console.error('❌ OCR Error:', error);
-    setIsProcessing(false);
     showToast({
       tone: 'error',
       title: 'Processing Failed',

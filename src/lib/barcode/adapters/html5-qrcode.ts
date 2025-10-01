@@ -52,6 +52,8 @@ export class Html5QrcodeAdapter implements BarcodeEngineAdapter {
     _canvas: HTMLCanvasElement,
     _options: BarcodeDecodeOptions,
   ): Promise<BarcodeScanResult | null> {
+    void _canvas;
+    void _options;
     // html5-qrcode does not provide a documented API to decode directly from canvas.
     return null;
   }
@@ -60,6 +62,7 @@ export class Html5QrcodeAdapter implements BarcodeEngineAdapter {
     file: File,
     _options: BarcodeDecodeOptions,
   ): Promise<BarcodeScanResult | null> {
+    void _options;
     if (typeof document === 'undefined') {
       return null;
     }
@@ -93,7 +96,7 @@ export class Html5QrcodeAdapter implements BarcodeEngineAdapter {
         duration,
         result,
       );
-    } catch (error) {
+    } catch {
       return null;
     }
   }

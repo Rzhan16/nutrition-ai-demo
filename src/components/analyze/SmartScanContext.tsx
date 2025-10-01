@@ -26,7 +26,7 @@ import { BarcodeDecodeLoop, BarcodeService } from '@/lib/barcode';
 import { ocrService } from '@/lib/ocr';
 import { APIError, apiClient, type AnalyzeInput } from '@/lib/api-client';
 import { mockAnalysis } from '@/lib/mock-data';
-import { generateId, mapApiErrorCode } from '@/lib/utils';
+import { generateId } from '@/lib/utils';
 import { useToast } from '@/components/ui/ToastProvider';
 import { dsldSearch, dsldGetLabel } from '@/lib/dsld/client';
 import type { DsldLabel, DsldSearchHit, DsldSearchResult } from '@/lib/dsld/types';
@@ -1441,6 +1441,7 @@ export function SmartScanProvider({ children }: { children: ReactNode }): ReactE
       runAnalysisAndSearch,
       runOcrOnFile,
       showToast,
+      updateMetrics,
       state.forceOCR,
       state.ocrResult,
     ],

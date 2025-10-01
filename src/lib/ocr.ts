@@ -79,38 +79,6 @@ const downscaleImage = (image: HTMLImageElement): HTMLCanvasElement => {
   return canvas;
 };
 
-const toGrayscale = (canvas: HTMLCanvasElement): void => {
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const data = imageData.data;
-  for (let i = 0; i < data.length; i += 4) {
-    const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-    data[i] = gray;
-    data[i + 1] = gray;
-    data[i + 2] = gray;
-  }
-  ctx.putImageData(imageData, 0, 0);
-};
-
-const adaptiveThreshold = (canvas: HTMLCanvasElement): void => {
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const data = imageData.data;
-  let sum = 0;
-  for (let i = 0; i < data.length; i += 4) {
-    sum += data[i];
-  }
-  const average = sum / (data.length / 4);
-  const threshold = average * 0.9;
-  for (let i = 0; i < data.length; i += 4) {
-    const value = data[i] >= threshold ? 255 : 0;
-    data[i] = data[i + 1] = data[i + 2] = value;
-  }
-  ctx.putImageData(imageData, 0, 0);
-};
-
 const rotateCanvas = (source: HTMLCanvasElement, angleDeg: number): HTMLCanvasElement => {
   if (!angleDeg) return source;
   const angle = (angleDeg * Math.PI) / 180;

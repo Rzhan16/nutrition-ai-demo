@@ -14,7 +14,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "prisma db push --force-reset && npm run db:seed",
     "postinstall": "prisma generate && npm run stage:tess",
-    "stage:tess": "node scripts/copy-tesseract-assets.mjs"
+    "stage:tess": "node scripts/copy-tesseract-assets.mjs",
+    "check:secrets": "node scripts/check-secrets.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.1",

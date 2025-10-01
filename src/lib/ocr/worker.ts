@@ -288,6 +288,10 @@ export async function getOcrWorker(
 
   await worker.reinitialize('eng', OEM.LSTM_ONLY)
 
+  if (logger && typeof worker.setLogger === 'function') {
+    worker.setLogger(logger)
+  }
+
   await worker.setParameters({
     // tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.%()-+µ/ ',
     preserve_interword_spaces: '1',

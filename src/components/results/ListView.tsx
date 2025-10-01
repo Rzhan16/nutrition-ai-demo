@@ -1,5 +1,7 @@
 'use client';
 
+/* eslint-disable @next/next/no-img-element */
+
 import React from 'react';
 import { InfiniteScroll } from './InfiniteScroll';
 import type { Supplement } from '@/lib/types';
@@ -32,12 +34,16 @@ export function ListView({
             className="bg-white border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer flex items-center space-x-4"
             onClick={() => onSupplementClick(supplement)}
           >
-            {supplement.imageUrl && (
+            {supplement.imageUrl ? (
               <img
                 src={supplement.imageUrl}
                 alt={supplement.name}
                 className="w-16 h-16 object-cover rounded"
               />
+            ) : (
+              <div className="w-16 h-16 rounded bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-[10px] font-medium text-gray-500">
+                No image
+              </div>
             )}
             
             <div className="flex-1">

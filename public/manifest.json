@@ -1,0 +1,21 @@
+{
+  "name": "Nutrition AI",
+  "short_name": "Nutrition AI",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0ea5e9",
+  "description": "AI-powered supplement search, OCR, and analysis demo.",
+  "icons": [
+    {
+      "src": "/vercel.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/vercel.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}

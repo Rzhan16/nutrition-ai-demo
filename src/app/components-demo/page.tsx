@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { NutrientInfo, type NutrientData } from '@/components/analysis/NutrientInfo';
-import { WarningBanner, WarningBannerGroup, type WarningData } from '@/components/analysis/WarningBanner';
+import { WarningBannerGroup, type WarningData } from '@/components/analysis/WarningBanner';
 import { ReferenceLinks, type ReferenceData } from '@/components/analysis/ReferenceLinks';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { 

@@ -48,14 +48,6 @@ export interface OcrPreprocessResult {
 const DEFAULT_MAX_SIDE = 1600;
 const DEFAULT_TIMEOUT_MS = 25000;
 const WORKER_IDLE_TIMEOUT = 30000; // 30 seconds
-const MAX_RETRIES = 2;
-
-// Quality thresholds
-const CONFIDENCE_THRESHOLDS = {
-  HIGH: 0.85,
-  MEDIUM: 0.70,
-  LOW: 0.50
-} as const;
 
 // Worker pool management
 class WorkerPool {
@@ -707,9 +699,7 @@ export class OptimizedOcrWorker {
 export const optimizedOcrWorker = new OptimizedOcrWorker();
 
 // Legacy compatibility
-export async function getOptimizedOcrWorker(
-  logger?: (message: TesseractLoggerMessage) => void
-): Promise<OptimizedOcrWorker> {
+export async function getOptimizedOcrWorker(): Promise<OptimizedOcrWorker> {
   return optimizedOcrWorker;
 }
 

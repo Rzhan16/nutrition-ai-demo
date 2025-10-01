@@ -257,8 +257,9 @@ export async function retryWithBackoff<T>(
 ): Promise<T> {
   let attempt = 0;
   let delay = initialDelayMs;
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
+  let lastError: unknown;
+
+  while (attempt <= retries) {
     if (signal?.aborted) {
       throw new DOMException('Operation aborted', 'AbortError');
     }
@@ -266,26 +267,38 @@ export async function retryWithBackoff<T>(
     try {
       return await operation(attempt);
     } catch (error) {
-      if (attempt >= retries) {
+      lastError = error;
+      if (attempt === retries) {
         throw error;
       }
       if (signal?.aborted) {
         throw new DOMException('Operation aborted', 'AbortError');
       }
-      if (onRetry) {
-        onRetry(attempt + 1, error);
-      }
+      onRetry?.(attempt + 1, error);
+
       await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => resolve(), delay);
-        signal?.addEventListener('abort', () => {
+        const onAbort = () => {
           clearTimeout(timeout);
+          signal?.removeEventListener('abort', onAbort);
           reject(new DOMException('Operation aborted', 'AbortError'));
-        }, { once: true });
+        };
+
+        const timeout = setTimeout(() => {
+          signal?.removeEventListener('abort', onAbort);
+          resolve();
+        }, delay);
+
+        if (signal) {
+          signal.addEventListener('abort', onAbort, { once: true });
+        }
       });
+
       attempt += 1;
       delay = Math.min(delay * 2, maxDelayMs);
     }
   }
+
+  throw lastError instanceof Error ? lastError : new Error('Retry attempts exhausted');
 }
 export function calculateConfidence(
   ocrConfidence: number,

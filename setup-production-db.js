@@ -115,7 +115,7 @@ async function verifyConnection() {
     if (result.success) {
       log('✅ Database connection verified', 'green');
     }
-  } catch (error) {
+  } catch {
     log('⚠️  Could not verify connection, but this might be normal', 'yellow');
   }
 }

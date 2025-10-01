@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { withErrorHandling, createSuccessResponse, createAIServiceError, createOCRServiceError } from '@/lib/error-handler'
+import { withErrorHandling, createSuccessResponse } from '@/lib/error-handler'
 import { withRateLimit, RateLimitConfigs, getRateLimitHeaders } from '@/lib/rate-limiter'
 import { ocrAnalysisSchema, textAnalysisSchema, aiAnalysisSchema } from '@/lib/validations'
 import { prisma } from '@/lib/db'
@@ -147,7 +147,8 @@ ${input.text}
       scanId: `scan-${Date.now()}`,
       analysisMethod: input.productInfo ? 'barcode_lookup' : 'ocr_analysis',
       confidence: input.productInfo ? 0.95 : 0.88,
-      sources: input.productInfo?.source ? [input.productInfo.source] : ['ocr_extraction']
+      sources: input.productInfo?.source ? [input.productInfo.source] : ['ocr_extraction'],
+      contextPreview: analysisContext.trim(),
     };
     
     return enhancedAnalysis;
@@ -237,7 +238,6 @@ export const POST = withErrorHandling(async (request: NextRequest): Promise<Next
 
     const userId = validatedInput.userId || 'anonymous';
     let ocrText = '';
-    let barcodeInfo = null;
     let productInfo = null;
 
     // Process based on input type
@@ -280,7 +280,7 @@ export const POST = withErrorHandling(async (request: NextRequest): Promise<Next
           orderBy: { createdAt: 'desc' }
         });
       } catch (error) {
-        console.log('Database not available, skipping cache check');
+        console.log('Database not available, skipping cache check', error);
       }
     }
 
@@ -311,7 +311,7 @@ export const POST = withErrorHandling(async (request: NextRequest): Promise<Next
       aiAnalysisSchema.parse(aiAnalysis);
     } catch (error) {
       // Fallback to mock analysis if AI service fails
-      console.log('AI service not available, using enhanced mock analysis');
+      console.log('AI service not available, using enhanced mock analysis', error);
       aiAnalysis = {
         ...mockAnalysis,
         scanId: `mock-${Date.now()}`,
@@ -353,7 +353,7 @@ export const POST = withErrorHandling(async (request: NextRequest): Promise<Next
           }
         }
       } catch (error) {
-        console.log('Database not available, skipping scan save');
+        console.log('Database not available, skipping scan save', error);
       }
     }
 
@@ -391,7 +391,7 @@ export const POST = withErrorHandling(async (request: NextRequest): Promise<Next
   }
 });
 
-export const GET = withErrorHandling(async (request: NextRequest): Promise<NextResponse> => {
+export const GET = withErrorHandling(async (): Promise<NextResponse> => {
   return NextResponse.json({
     success: true,
     message: 'Analysis API is ready',

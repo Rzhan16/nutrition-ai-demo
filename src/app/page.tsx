@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { FlaskConical } from 'lucide-react';
 
 export default function HomePage() {
   return (

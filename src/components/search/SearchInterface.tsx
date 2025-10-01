@@ -1,9 +1,10 @@
 'use client';
 
+/* eslint-disable @next/next/no-img-element */
+
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { 
-  Search, 
-  Filter, 
+import {
+  Search,
   SlidersHorizontal,
   Mic,
   MicOff,
@@ -96,66 +97,6 @@ export function SearchInterface({
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const barcodeVideoRef = useRef<HTMLVideoElement>(null);
 
-  // Initialize voice search
-  useEffect(() => {
-    if (typeof window !== 'undefined' && 'webkitSpeechRecognition' in window) {
-      const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
-      const recognition = new SpeechRecognition();
-      
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      recognition.lang = 'en-US';
-
-      recognition.onstart = () => {
-        setVoiceSearch(prev => ({ ...prev, isListening: true }));
-      };
-
-      recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        setVoiceSearch(prev => ({ ...prev, transcript }));
-        setSearchQuery(transcript);
-        performSearch(transcript);
-      };
-
-      recognition.onend = () => {
-        setVoiceSearch(prev => ({ ...prev, isListening: false }));
-      };
-
-      recognition.onerror = (event) => {
-        console.error('Voice recognition error:', event.error);
-        setVoiceSearch(prev => ({ ...prev, isListening: false }));
-        onError?.('Voice search failed: ' + event.error);
-      };
-
-      recognitionRef.current = recognition;
-      setVoiceSearch(prev => ({ ...prev, isSupported: true }));
-    }
-
-    // Load search history from localStorage
-    const savedHistory = localStorage.getItem('supplement-search-history');
-    if (savedHistory) {
-      try {
-        const history = JSON.parse(savedHistory).map((item: any) => ({
-          ...item,
-          timestamp: new Date(item.timestamp)
-        }));
-        setSearchHistory(history);
-      } catch (error) {
-        console.error('Failed to load search history:', error);
-      }
-    }
-
-    // Load wishlist from localStorage
-    const savedWishlist = localStorage.getItem('supplement-wishlist');
-    if (savedWishlist) {
-      try {
-        setWishlist(new Set(JSON.parse(savedWishlist)));
-      } catch (error) {
-        console.error('Failed to load wishlist:', error);
-      }
-    }
-  }, [onError]);
-
   // Perform search
   const performSearch = useCallback(async (query: string, page: number = 1) => {
     if (!query.trim()) {
@@ -210,7 +151,67 @@ export function SearchInterface({
     } finally {
       setLoading(false);
     }
-  }, [filters, sortBy, sortOrder, onError]);
+  }, [filters, onError]);
+
+  // Initialize voice search and load persisted state
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'webkitSpeechRecognition' in window) {
+      const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+      const recognition = new SpeechRecognition();
+
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        setVoiceSearch((prev) => ({ ...prev, isListening: true }));
+      };
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        setVoiceSearch((prev) => ({ ...prev, transcript }));
+        setSearchQuery(transcript);
+        performSearch(transcript);
+      };
+
+      recognition.onend = () => {
+        setVoiceSearch((prev) => ({ ...prev, isListening: false }));
+      };
+
+      recognition.onerror = (event) => {
+        console.error('Voice recognition error:', event.error);
+        setVoiceSearch((prev) => ({ ...prev, isListening: false }));
+        onError?.('Voice search failed: ' + event.error);
+      };
+
+      recognitionRef.current = recognition;
+      setVoiceSearch((prev) => ({ ...prev, isSupported: true }));
+    }
+
+    // Load search history from localStorage
+    const savedHistory = localStorage.getItem('supplement-search-history');
+    if (savedHistory) {
+      try {
+        const history = JSON.parse(savedHistory).map((item: { timestamp: string }) => ({
+          ...item,
+          timestamp: new Date(item.timestamp),
+        }));
+        setSearchHistory(history);
+      } catch (error) {
+        console.error('Failed to load search history:', error);
+      }
+    }
+
+    // Load wishlist from localStorage
+    const savedWishlist = localStorage.getItem('supplement-wishlist');
+    if (savedWishlist) {
+      try {
+        setWishlist(new Set(JSON.parse(savedWishlist)));
+      } catch (error) {
+        console.error('Failed to load wishlist:', error);
+      }
+    }
+  }, [onError, performSearch]);
 
   // Voice search handlers
   const startVoiceSearch = useCallback(() => {
@@ -229,9 +230,13 @@ export function SearchInterface({
   const startBarcodeSearch = useCallback(async () => {
     try {
       setShowBarcodeScanner(true);
-      await barcodeService.initializeScanner();
-      
-      barcodeService.startScanning(
+      const videoElement = barcodeVideoRef.current ?? undefined;
+
+      await barcodeService.initializeScanner({
+        target: videoElement,
+      });
+
+      await barcodeService.startScanning(
         (result: BarcodeScanResult) => {
           if (result.productInfo?.name) {
             setSearchQuery(result.productInfo.name);
@@ -242,11 +247,14 @@ export function SearchInterface({
         (error: Error) => {
           onError?.('Barcode scanning failed: ' + error.message);
           setShowBarcodeScanner(false);
-        }
+        },
+        { video: videoElement }
       );
     } catch (error) {
+      console.error('Failed to start barcode scanner:', error);
       onError?.('Failed to start barcode scanner');
       setShowBarcodeScanner(false);
+      barcodeService.stopScanning();
     }
   }, [performSearch, onError]);
 

@@ -6,9 +6,6 @@
  */
 
 const http = require('http');
-const fs = require('fs');
-
-const BASE_URL = 'http://localhost:3000';
 
 // ANSI colors for console output
 const colors = {
@@ -46,7 +43,7 @@ async function makeRequest(method, path, data = null, headers = {}) {
         try {
           const jsonBody = JSON.parse(body);
           resolve({ status: res.statusCode, data: jsonBody, headers: res.headers });
-        } catch (e) {
+        } catch {
           resolve({ status: res.statusCode, data: body, headers: res.headers });
         }
       });
@@ -276,7 +273,6 @@ async function testErrorBoundaries() {
     
     const results = await Promise.allSettled(concurrentRequests);
     const successful = results.filter(r => r.status === 'fulfilled').length;
-    const failed_requests = results.filter(r => r.status === 'rejected').length;
     
     if (successful >= 3) { // At least 60% success rate
       log(`✅ Concurrent requests handled well (${successful}/${results.length} successful)`, 'green');
