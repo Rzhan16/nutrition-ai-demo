@@ -34,6 +34,8 @@ const IGNORED_PATHS = new Set([
   'prisma/dev.db',
 ]);
 
+const SELF_PATH = 'scripts/check-secrets.js';
+
 function isIgnored(filePath) {
   for (const ignored of IGNORED_PATHS) {
     if (filePath === ignored || filePath.startsWith(`${ignored}/`)) {
@@ -69,6 +71,9 @@ function runGitLsFiles() {
 }
 
 function scanFile(filePath) {
+  if (filePath === SELF_PATH) {
+    return [];
+  }
   const absolutePath = path.join(WORKDIR, filePath);
   let content;
   try {

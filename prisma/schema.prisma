@@ -14,6 +14,7 @@ model Supplement {
   category    String
   ingredients Json     // [{name: string, amount: string, unit: string}]
   imageUrl    String?
+  barcode     String?  @unique
   verified    Boolean  @default(false)
   createdAt   DateTime @default(now())
   

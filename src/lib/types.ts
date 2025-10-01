@@ -6,6 +6,7 @@ export interface Supplement {
   category: string;
   ingredients: ParsedIngredient[];
   imageUrl?: string;
+  barcode?: string;
   verified: boolean;
   createdAt: Date;
   scans?: Scan[];
@@ -93,13 +94,27 @@ export interface UploadResponse {
 }
 
 // Barcode Types
-export const BARCODE_ENGINE_VALUES = ['quagga', 'zxing', 'html5-qrcode'] as const;
+export const BARCODE_ENGINE_VALUES = [
+  'quagga',
+  'zxing',
+  'html5-qrcode',
+] as const;
 export type BarcodeEngine = (typeof BARCODE_ENGINE_VALUES)[number];
 
-export const BARCODE_ENGINE_OPTIONS = ['auto', ...BARCODE_ENGINE_VALUES] as const;
+export const BARCODE_ENGINE_OPTIONS = [
+  'auto',
+  ...BARCODE_ENGINE_VALUES,
+] as const;
 export type BarcodeEngineOption = (typeof BARCODE_ENGINE_OPTIONS)[number];
 
-export const BARCODE_FORMATS = ['EAN13', 'EAN8', 'UPC', 'UPCE', 'CODE128', 'CODE39'] as const;
+export const BARCODE_FORMATS = [
+  'EAN13',
+  'EAN8',
+  'UPC',
+  'UPCE',
+  'CODE128',
+  'CODE39',
+] as const;
 export type BarcodeFormat = (typeof BARCODE_FORMATS)[number];
 
 export type BarcodeErrorCode =
@@ -159,7 +174,13 @@ export interface OCRWord {
   bbox?: OCRBoundingBox;
 }
 
-export type OCRErrorCode = 'ocr_failed' | 'ocr_low_confidence' | 'ocr_timeout' | 'ocr_aborted' | 'analyze_failed' | 'search_failed';
+export type OCRErrorCode =
+  | 'ocr_failed'
+  | 'ocr_low_confidence'
+  | 'ocr_timeout'
+  | 'ocr_aborted'
+  | 'analyze_failed'
+  | 'search_failed';
 
 export interface OCRResult {
   ok: boolean;
@@ -188,6 +209,34 @@ export interface OCRResult {
     hasNutritionKeywords: boolean;
     hasNumericData: boolean;
     qualityScore: number;
+    medianWordConfidence?: number;
+    lowConfidenceThreshold?: number;
+    belowThreshold?: boolean;
+  };
+  diagnostics?: OCRDiagnostics;
+}
+
+export interface OCRDiagnostics {
+  confidence: number;
+  normalizedConfidence: number;
+  medianWordConfidence: number | null;
+  lowConfidenceThreshold: number;
+  belowThreshold: boolean;
+  wordCount: number;
+  detectedOrientationDegrees: number;
+  appliedRotationDegrees: number;
+  durationMs: number;
+  timestamp: string;
+  preprocess: {
+    width: number;
+    height: number;
+    thresholdOn: boolean;
+    averageBrightness: number;
+    stdDeviation: number;
+    sourceAverageBrightness: number;
+    sourceStdDeviation: number;
+    denoiseApplied: boolean;
+    autoThreshold: boolean;
   };
 }
 

@@ -1,214 +1,389 @@
-import Tesseract, { type RecognizeResult, type LoggerMessage, PSM, OEM } from 'tesseract.js'
+import Tesseract, {
+  type RecognizeResult,
+  type LoggerMessage,
+  PSM,
+  OEM,
+} from 'tesseract.js';
 
-type OcrImageSource = Blob | HTMLImageElement | HTMLCanvasElement | ImageBitmap | ImageData
+type OcrImageSource =
+  | Blob
+  | HTMLImageElement
+  | HTMLCanvasElement
+  | ImageBitmap
+  | ImageData;
 
 export interface OcrImageMeta {
-  width: number
-  height: number
-  pixelCount: number
+  width: number;
+  height: number;
+  pixelCount: number;
 }
 
 export interface OcrPreprocessOptions {
-  maxSide?: number
-  threshold?: boolean
+  maxSide?: number;
+  threshold?: boolean;
+  denoise?: boolean;
+  autoThreshold?: boolean;
 }
 
 export interface OcrPreprocessResult {
-  canvas: HTMLCanvasElement
-  meta: OcrImageMeta & { thresholdOn: boolean }
+  canvas: HTMLCanvasElement;
+  meta: OcrImageMeta & {
+    thresholdOn: boolean;
+    averageBrightness: number;
+    stdDeviation: number;
+    sourceAverageBrightness: number;
+    sourceStdDeviation: number;
+    denoiseApplied: boolean;
+    autoThreshold: boolean;
+  };
 }
 
-const DEFAULT_MAX_SIDE = 1400
+const DEFAULT_MAX_SIDE = 1400;
 
 const isCanvas = (source: OcrImageSource): source is HTMLCanvasElement =>
-  typeof HTMLCanvasElement !== 'undefined' && source instanceof HTMLCanvasElement
+  typeof HTMLCanvasElement !== 'undefined' &&
+  source instanceof HTMLCanvasElement;
 
 const isImageElement = (source: OcrImageSource): source is HTMLImageElement =>
-  typeof HTMLImageElement !== 'undefined' && source instanceof HTMLImageElement
+  typeof HTMLImageElement !== 'undefined' && source instanceof HTMLImageElement;
 
 const isImageData = (source: OcrImageSource): source is ImageData =>
-  typeof ImageData !== 'undefined' && source instanceof ImageData
+  typeof ImageData !== 'undefined' && source instanceof ImageData;
 
-const isBlob = (source: OcrImageSource): source is Blob => source instanceof Blob
+const isBlob = (source: OcrImageSource): source is Blob =>
+  source instanceof Blob;
 
 const isImageBitmap = (source: OcrImageSource): source is ImageBitmap => {
   if (typeof ImageBitmap === 'undefined') {
-    return false
+    return false;
   }
   try {
-    return source instanceof ImageBitmap
+    return source instanceof ImageBitmap;
   } catch {
-    const candidate = source as ImageBitmap | undefined
+    const candidate = source as ImageBitmap | undefined;
     return (
       typeof candidate?.width === 'number' &&
       typeof candidate?.height === 'number' &&
       typeof candidate?.close === 'function'
-    )
+    );
   }
-}
+};
 
-const ensureBrowserCanvas = (width: number, height: number): HTMLCanvasElement => {
+const ensureBrowserCanvas = (
+  width: number,
+  height: number
+): HTMLCanvasElement => {
   if (typeof document === 'undefined') {
-    throw new Error('Canvas is not available in this environment')
+    throw new Error('Canvas is not available in this environment');
   }
-  const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = height
-  return canvas
-}
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  return canvas;
+};
 
 const getContext = (canvas: HTMLCanvasElement): CanvasRenderingContext2D => {
-  const context = canvas.getContext('2d', { willReadFrequently: true }) as CanvasRenderingContext2D | null
+  const context = canvas.getContext('2d', {
+    willReadFrequently: true,
+  }) as CanvasRenderingContext2D | null;
   if (!context) {
-    throw new Error('Canvas context unavailable')
+    throw new Error('Canvas context unavailable');
   }
-  return context
-}
+  return context;
+};
 
 const cloneCanvas = (source: HTMLCanvasElement): HTMLCanvasElement => {
-  const canvas = ensureBrowserCanvas(source.width, source.height)
-  getContext(canvas).drawImage(source, 0, 0)
-  return canvas
-}
+  const canvas = ensureBrowserCanvas(source.width, source.height);
+  getContext(canvas).drawImage(source, 0, 0);
+  return canvas;
+};
 
 const canvasFromBitmap = (bitmap: ImageBitmap): HTMLCanvasElement => {
-  const canvas = ensureBrowserCanvas(bitmap.width, bitmap.height)
-  getContext(canvas).drawImage(bitmap, 0, 0)
-  return canvas
-}
+  const canvas = ensureBrowserCanvas(bitmap.width, bitmap.height);
+  getContext(canvas).drawImage(bitmap, 0, 0);
+  return canvas;
+};
 
 const canvasFromImage = (image: HTMLImageElement): HTMLCanvasElement => {
-  const canvas = ensureBrowserCanvas(image.naturalWidth || image.width, image.naturalHeight || image.height)
-  getContext(canvas).drawImage(image, 0, 0)
-  return canvas
-}
+  const canvas = ensureBrowserCanvas(
+    image.naturalWidth || image.width,
+    image.naturalHeight || image.height
+  );
+  getContext(canvas).drawImage(image, 0, 0);
+  return canvas;
+};
 
 const canvasFromImageData = (data: ImageData): HTMLCanvasElement => {
-  const canvas = ensureBrowserCanvas(data.width, data.height)
-  getContext(canvas).putImageData(data, 0, 0)
-  return canvas
-}
+  const canvas = ensureBrowserCanvas(data.width, data.height);
+  getContext(canvas).putImageData(data, 0, 0);
+  return canvas;
+};
 
-const resizeCanvasIfNeeded = (source: HTMLCanvasElement, maxSide: number): HTMLCanvasElement => {
-  const longestSide = Math.max(source.width, source.height)
+const resizeCanvasIfNeeded = (
+  source: HTMLCanvasElement,
+  maxSide: number
+): HTMLCanvasElement => {
+  const longestSide = Math.max(source.width, source.height);
   if (!maxSide || longestSide <= maxSide) {
-    return cloneCanvas(source)
+    return cloneCanvas(source);
   }
 
-  const scale = maxSide / longestSide
-  const targetWidth = Math.round(source.width * scale)
-  const targetHeight = Math.round(source.height * scale)
-  const canvas = ensureBrowserCanvas(targetWidth, targetHeight)
-  getContext(canvas).drawImage(source, 0, 0, targetWidth, targetHeight)
-  return canvas
-}
+  const scale = maxSide / longestSide;
+  const targetWidth = Math.round(source.width * scale);
+  const targetHeight = Math.round(source.height * scale);
+  const canvas = ensureBrowserCanvas(targetWidth, targetHeight);
+  getContext(canvas).drawImage(source, 0, 0, targetWidth, targetHeight);
+  return canvas;
+};
 
-const applyGrayscale = (imageData: ImageData, grayscaleValues: Uint8ClampedArray): number => {
-  let sum = 0
-  for (let i = 0, pixelIndex = 0; i < imageData.data.length; i += 4, pixelIndex += 1) {
-    const red = imageData.data[i]
-    const green = imageData.data[i + 1]
-    const blue = imageData.data[i + 2]
-    const gray = Math.round(red * 0.299 + green * 0.587 + blue * 0.114)
-    imageData.data[i] = gray
-    imageData.data[i + 1] = gray
-    imageData.data[i + 2] = gray
-    grayscaleValues[pixelIndex] = gray
-    sum += gray
+const applyGrayscale = (
+  imageData: ImageData,
+  grayscaleValues: Uint8ClampedArray
+): number => {
+  let sum = 0;
+  for (
+    let i = 0, pixelIndex = 0;
+    i < imageData.data.length;
+    i += 4, pixelIndex += 1
+  ) {
+    const red = imageData.data[i];
+    const green = imageData.data[i + 1];
+    const blue = imageData.data[i + 2];
+    const gray = Math.round(red * 0.299 + green * 0.587 + blue * 0.114);
+    imageData.data[i] = gray;
+    imageData.data[i + 1] = gray;
+    imageData.data[i + 2] = gray;
+    grayscaleValues[pixelIndex] = gray;
+    sum += gray;
   }
-  return sum
-}
+  return sum;
+};
 
-const applyThreshold = (imageData: ImageData, grayscaleValues: Uint8ClampedArray, average: number): void => {
-  const threshold = average * 0.92
-  for (let i = 0, pixelIndex = 0; i < imageData.data.length; i += 4, pixelIndex += 1) {
-    const value = grayscaleValues[pixelIndex] >= threshold ? 255 : 0
-    imageData.data[i] = value
-    imageData.data[i + 1] = value
-    imageData.data[i + 2] = value
+const applyThreshold = (
+  imageData: ImageData,
+  grayscaleValues: Uint8ClampedArray,
+  average: number
+): void => {
+  const threshold = average * 0.92;
+  for (
+    let i = 0, pixelIndex = 0;
+    i < imageData.data.length;
+    i += 4, pixelIndex += 1
+  ) {
+    const value = grayscaleValues[pixelIndex] >= threshold ? 255 : 0;
+    imageData.data[i] = value;
+    imageData.data[i + 1] = value;
+    imageData.data[i + 2] = value;
+    grayscaleValues[pixelIndex] = value;
   }
-}
+};
 
-const enhanceCanvasContrast = (canvas: HTMLCanvasElement, thresholdOn: boolean): void => {
-  const context = getContext(canvas)
-  const imageData = context.getImageData(0, 0, canvas.width, canvas.height)
-  const grayscaleValues = new Uint8ClampedArray(imageData.data.length / 4)
-  const sum = applyGrayscale(imageData, grayscaleValues)
+const computeGrayscaleStats = (
+  values: Uint8ClampedArray
+): { average: number; stdDev: number } => {
+  if (values.length === 0) {
+    return { average: 0, stdDev: 0 };
+  }
+
+  let sum = 0;
+  let sumSquared = 0;
+  for (let i = 0; i < values.length; i += 1) {
+    const value = values[i];
+    sum += value;
+    sumSquared += value * value;
+  }
+
+  const average = sum / values.length;
+  const variance = Math.max(0, sumSquared / values.length - average * average);
+  return { average, stdDev: Math.sqrt(variance) };
+};
+
+const applyMedianFilter = (
+  values: Uint8ClampedArray,
+  width: number,
+  height: number
+): void => {
+  if (values.length === 0) {
+    return;
+  }
+
+  const result = new Uint8ClampedArray(values.length);
+  const neighborhood: number[] = [];
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      neighborhood.length = 0;
+      for (let dy = -1; dy <= 1; dy += 1) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= height) continue;
+        for (let dx = -1; dx <= 1; dx += 1) {
+          const nx = x + dx;
+          if (nx < 0 || nx >= width) continue;
+          neighborhood.push(values[ny * width + nx]);
+        }
+      }
+      neighborhood.sort((a, b) => a - b);
+      const medianIndex = Math.floor(neighborhood.length / 2);
+      result[y * width + x] = neighborhood[medianIndex];
+    }
+  }
+
+  for (let i = 0; i < values.length; i += 1) {
+    values[i] = result[i];
+  }
+};
+
+const computeCanvasStats = (
+  canvas: HTMLCanvasElement
+): { average: number; stdDev: number } => {
+  const context = getContext(canvas);
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const values = new Uint8ClampedArray(imageData.data.length / 4);
+  let sum = 0;
+  let sumSquared = 0;
+  for (
+    let i = 0, pixelIndex = 0;
+    i < imageData.data.length;
+    i += 4, pixelIndex += 1
+  ) {
+    const red = imageData.data[i];
+    const green = imageData.data[i + 1];
+    const blue = imageData.data[i + 2];
+    const gray = Math.round(red * 0.299 + green * 0.587 + blue * 0.114);
+    values[pixelIndex] = gray;
+    sum += gray;
+    sumSquared += gray * gray;
+  }
+
+  if (values.length === 0) {
+    return { average: 0, stdDev: 0 };
+  }
+
+  const average = sum / values.length;
+  const variance = Math.max(0, sumSquared / values.length - average * average);
+  return { average, stdDev: Math.sqrt(variance) };
+};
+
+const enhanceCanvasContrast = (
+  canvas: HTMLCanvasElement,
+  thresholdOn: boolean,
+  denoise: boolean
+): { average: number; stdDev: number } => {
+  const context = getContext(canvas);
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const grayscaleValues = new Uint8ClampedArray(imageData.data.length / 4);
+  applyGrayscale(imageData, grayscaleValues);
+
+  if (denoise) {
+    applyMedianFilter(grayscaleValues, canvas.width, canvas.height);
+    for (
+      let i = 0, pixelIndex = 0;
+      i < imageData.data.length;
+      i += 4, pixelIndex += 1
+    ) {
+      const value = grayscaleValues[pixelIndex];
+      imageData.data[i] = value;
+      imageData.data[i + 1] = value;
+      imageData.data[i + 2] = value;
+    }
+  }
 
   if (thresholdOn && grayscaleValues.length > 0) {
-    const average = sum / grayscaleValues.length
-    applyThreshold(imageData, grayscaleValues, average)
+    const statsBeforeThreshold = computeGrayscaleStats(grayscaleValues);
+    applyThreshold(imageData, grayscaleValues, statsBeforeThreshold.average);
   }
 
-  context.putImageData(imageData, 0, 0)
-}
+  context.putImageData(imageData, 0, 0);
+  return computeCanvasStats(canvas);
+};
 
 const blobToImage = async (blob: Blob): Promise<HTMLImageElement> => {
   if (typeof window === 'undefined') {
-    throw new Error('Image loading is not available in this environment')
+    throw new Error('Image loading is not available in this environment');
   }
-  const url = URL.createObjectURL(blob)
+  const url = URL.createObjectURL(blob);
   try {
-    const image = new Image()
-    image.decoding = 'async'
-    image.src = url
+    const image = new Image();
+    image.decoding = 'async';
+    image.src = url;
     if (typeof image.decode === 'function') {
       try {
-        await image.decode()
-        return image
+        await image.decode();
+        return image;
       } catch {
         // Fallback to load events below
       }
     }
 
     await new Promise<void>((resolve, reject) => {
-      image.onload = () => resolve()
-      image.onerror = () => reject(new Error('Failed to load image'))
-    })
-    return image
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error('Failed to load image'));
+    });
+    return image;
   } finally {
-    URL.revokeObjectURL(url)
+    URL.revokeObjectURL(url);
   }
-}
+};
 
-const ensureCanvasFromSource = async (source: OcrImageSource): Promise<HTMLCanvasElement> => {
+const ensureCanvasFromSource = async (
+  source: OcrImageSource
+): Promise<HTMLCanvasElement> => {
   if (isCanvas(source)) {
-    return cloneCanvas(source)
+    return cloneCanvas(source);
   }
 
   if (isImageBitmap(source)) {
-    const canvas = canvasFromBitmap(source)
+    const canvas = canvasFromBitmap(source);
     if (typeof source.close === 'function') {
-      source.close()
+      source.close();
     }
-    return canvas
+    return canvas;
   }
 
   if (isImageElement(source)) {
-    return canvasFromImage(source)
+    return canvasFromImage(source);
   }
 
   if (isImageData(source)) {
-    return canvasFromImageData(source)
+    return canvasFromImageData(source);
   }
 
   if (isBlob(source)) {
-    const image = await blobToImage(source)
-    return canvasFromImage(image)
+    const image = await blobToImage(source);
+    return canvasFromImage(image);
   }
 
-  throw new Error('Unsupported OCR source input')
-}
+  throw new Error('Unsupported OCR source input');
+};
 
 export const preprocessOcrSource = async (
   source: OcrImageSource,
   options: OcrPreprocessOptions = {}
 ): Promise<OcrPreprocessResult> => {
-  const thresholdOn = options.threshold !== false
-  const maxSide = options.maxSide ?? DEFAULT_MAX_SIDE
-  const baseCanvas = await ensureCanvasFromSource(source)
-  const processedCanvas = resizeCanvasIfNeeded(baseCanvas, maxSide)
-  enhanceCanvasContrast(processedCanvas, thresholdOn)
+  const baseCanvas = await ensureCanvasFromSource(source);
+  const baseStats = computeCanvasStats(baseCanvas);
+
+  const autoThreshold = options.autoThreshold !== false;
+  let thresholdOn: boolean;
+  if (typeof options.threshold === 'boolean') {
+    thresholdOn = options.threshold;
+  } else if (!autoThreshold) {
+    thresholdOn = true;
+  } else {
+    const lowContrast = baseStats.stdDev < 32;
+    const veryDark = baseStats.average < 96;
+    const veryBright = baseStats.average > 210;
+    thresholdOn = lowContrast || veryDark || veryBright;
+  }
+
+  const denoise = options.denoise !== false && baseStats.stdDev < 70;
+  const maxSide = options.maxSide ?? DEFAULT_MAX_SIDE;
+  const processedCanvas = resizeCanvasIfNeeded(baseCanvas, maxSide);
+  const processedStats = enhanceCanvasContrast(
+    processedCanvas,
+    thresholdOn,
+    denoise
+  );
 
   return {
     canvas: processedCanvas,
@@ -217,92 +392,103 @@ export const preprocessOcrSource = async (
       height: processedCanvas.height,
       pixelCount: processedCanvas.width * processedCanvas.height,
       thresholdOn,
+      averageBrightness: processedStats.average,
+      stdDeviation: processedStats.stdDev,
+      sourceAverageBrightness: baseStats.average,
+      sourceStdDeviation: baseStats.stdDev,
+      denoiseApplied: denoise,
+      autoThreshold,
     },
-  }
-}
+  };
+};
 
 export const choosePSM = (meta: OcrImageMeta): PSM => {
-  const { width, height, pixelCount } = meta
-  const aspectRatio = width && height ? width / height : 1
-  const area = pixelCount || width * height
-  const isWideShort = aspectRatio >= 2.5 && height < 720
-  const isDense = area >= 1_200_000 && aspectRatio < 2 && height > 600
+  const { width, height, pixelCount } = meta;
+  const aspectRatio = width && height ? width / height : 1;
+  const area = pixelCount || width * height;
+  const isWideShort = aspectRatio >= 2.5 && height < 720;
+  const isDense = area >= 1_200_000 && aspectRatio < 2 && height > 600;
 
   if (isWideShort) {
-    return PSM.SINGLE_LINE
+    return PSM.SINGLE_LINE;
   }
 
   if (isDense) {
-    return PSM.SPARSE_TEXT
+    return PSM.SPARSE_TEXT;
   }
 
-  return PSM.AUTO
-}
+  return PSM.AUTO;
+};
 
 export const applyDynamicPageSegMode = async (
   workerInstance: Tesseract.Worker,
   meta: OcrImageMeta
 ): Promise<PSM> => {
-  const nextMode = choosePSM(meta)
-  await workerInstance.setParameters({ tessedit_pageseg_mode: nextMode })
-  return nextMode
-}
+  const nextMode = choosePSM(meta);
+  await workerInstance.setParameters({ tessedit_pageseg_mode: nextMode });
+  return nextMode;
+};
 
-export type TesseractLoggerMessage = LoggerMessage
-export type TesseractRecognizeResult = RecognizeResult
+export type TesseractLoggerMessage = LoggerMessage;
+export type TesseractRecognizeResult = RecognizeResult;
 
-let worker: Tesseract.Worker | null = null
+let worker: Tesseract.Worker | null = null;
 
 async function pickCorePath(): Promise<string> {
-  const candidates = ['/tesseract/tesseract-core.wasm.js', '/tesseract/tesseract-core.wasm']
+  const candidates = [
+    '/tesseract/tesseract-core.wasm.js',
+    '/tesseract/tesseract-core.wasm',
+  ];
 
   for (const candidate of candidates) {
     try {
-      const response = await fetch(candidate, { method: 'HEAD' })
+      const response = await fetch(candidate, { method: 'HEAD' });
       if (response.ok) {
-        return candidate
+        return candidate;
       }
     } catch (error) {
-      console.warn('Failed to probe Tesseract core path', candidate, error)
+      console.warn('Failed to probe Tesseract core path', candidate, error);
     }
   }
 
-  throw new Error('Unable to locate Tesseract core assets. Please run npm run stage:tess and retry.')
+  throw new Error(
+    'Unable to locate Tesseract core assets. Please run npm run stage:tess and retry.'
+  );
 }
 
 export async function getOcrWorker(
   logger?: (message: TesseractLoggerMessage) => void
 ): Promise<Tesseract.Worker> {
   if (worker) {
-    return worker
+    return worker;
   }
 
-  const corePath = await pickCorePath()
+  const corePath = await pickCorePath();
   const options: Partial<Tesseract.WorkerOptions> = {
     workerPath: '/tesseract/worker.min.js',
     corePath,
     langPath: '/tesseract',
-  }
+  };
 
-  worker = await Tesseract.createWorker('eng', OEM.LSTM_ONLY, options)
+  worker = await Tesseract.createWorker('eng', OEM.LSTM_ONLY, options);
 
-  await worker.reinitialize('eng', OEM.LSTM_ONLY)
+  await worker.reinitialize('eng', OEM.LSTM_ONLY);
 
   if (logger && typeof worker.setLogger === 'function') {
-    worker.setLogger(logger)
+    worker.setLogger(logger);
   }
 
   await worker.setParameters({
     // tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.%()-+µ/ ',
     preserve_interword_spaces: '1',
     tessedit_pageseg_mode: PSM.AUTO,
-  })
+  });
 
-  return worker
+  return worker;
 }
 
 export async function terminateOcrWorker(): Promise<void> {
-  if (!worker) return
-  await worker.terminate()
-  worker = null
+  if (!worker) return;
+  await worker.terminate();
+  worker = null;
 }

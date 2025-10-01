@@ -13,6 +13,7 @@ import type {
   OCRBoundingBox,
   OCRResult,
   OCRWord,
+  OCRDiagnostics,
   ParsedIngredient,
 } from '@/lib/types';
 
@@ -79,7 +80,10 @@ const downscaleImage = (image: HTMLImageElement): HTMLCanvasElement => {
   return canvas;
 };
 
-const rotateCanvas = (source: HTMLCanvasElement, angleDeg: number): HTMLCanvasElement => {
+const rotateCanvas = (
+  source: HTMLCanvasElement,
+  angleDeg: number
+): HTMLCanvasElement => {
   if (!angleDeg) return source;
   const angle = (angleDeg * Math.PI) / 180;
   const sin = Math.abs(Math.sin(angle));
@@ -99,7 +103,7 @@ const rotateCanvas = (source: HTMLCanvasElement, angleDeg: number): HTMLCanvasEl
 
 const extractWords = (result: TesseractRecognizeResult): OCRWord[] => {
   const words = result.data?.words ?? [];
-  return words.map((word) => ({
+  return words.map(word => ({
     text: word.text,
     confidence: (word.confidence ?? 0) / 100,
     bbox: word.bbox
@@ -113,9 +117,11 @@ const extractWords = (result: TesseractRecognizeResult): OCRWord[] => {
   }));
 };
 
-const extractBoundingBoxes = (result: TesseractRecognizeResult): OCRBoundingBox[] => {
+const extractBoundingBoxes = (
+  result: TesseractRecognizeResult
+): OCRBoundingBox[] => {
   const words = result.data?.words ?? [];
-  return words.map((word) => ({
+  return words.map(word => ({
     x: word.bbox?.x0 ?? 0,
     y: word.bbox?.y0 ?? 0,
     width: (word.bbox?.x1 ?? 0) - (word.bbox?.x0 ?? 0),
@@ -130,11 +136,11 @@ const createTimeout = <T>(promise: Promise<T>, timeoutMs: number): Promise<T> =>
     }, timeoutMs);
 
     promise
-      .then((value) => {
+      .then(value => {
         clearTimeout(timeoutId);
         resolve(value);
       })
-      .catch((error) => {
+      .catch(error => {
         clearTimeout(timeoutId);
         reject(error);
       });
@@ -142,10 +148,14 @@ const createTimeout = <T>(promise: Promise<T>, timeoutMs: number): Promise<T> =>
 
 type NormalizedOcr = { text: string; confidence: number };
 
-const normalizeOcrResult = (result: TesseractRecognizeResult): NormalizedOcr => {
+const normalizeOcrResult = (
+  result: TesseractRecognizeResult
+): NormalizedOcr => {
   const data = result?.data;
-  const rawConfidence = typeof data?.confidence === 'number' ? data.confidence : 0;
-  const normalizedConfidence = rawConfidence > 1 ? rawConfidence / 100 : rawConfidence;
+  const rawConfidence =
+    typeof data?.confidence === 'number' ? data.confidence : 0;
+  const normalizedConfidence =
+    rawConfidence > 1 ? rawConfidence / 100 : rawConfidence;
   const confidence = Math.max(0, Math.min(1, normalizedConfidence));
   const text = cleanOcrText(data?.text ?? '');
 
@@ -160,7 +170,9 @@ export class OCRService {
   private initializing: Promise<void> | null = null;
 
   private get language(): string {
-    return (process.env.NEXT_PUBLIC_OCR_LANG || DEFAULT_LANG).trim() || DEFAULT_LANG;
+    return (
+      (process.env.NEXT_PUBLIC_OCR_LANG || DEFAULT_LANG).trim() || DEFAULT_LANG
+    );
   }
 
   private async ensureWorker(): Promise<TesseractWorker> {
@@ -168,7 +180,7 @@ export class OCRService {
 
     if (!this.initializing) {
       this.initializing = getOcrWorker()
-        .then((instance) => {
+        .then(instance => {
           this.worker = instance;
         })
         .finally(() => {
@@ -185,7 +197,11 @@ export class OCRService {
 
   async processImage(
     imageFile: File,
-    options: { onProgress?: (value: number, status: string) => void; signal?: AbortSignal; timeoutMs?: number } = {}
+    options: {
+      onProgress?: (value: number, status: string) => void;
+      signal?: AbortSignal;
+      timeoutMs?: number;
+    } = {}
   ): Promise<OCRResult> {
     if (typeof window === 'undefined') {
       throw new Error('OCR is only available in the browser');
@@ -227,10 +243,16 @@ export class OCRService {
       if (typeof worker.detect === 'function') {
         try {
           options.onProgress?.(35, 'detecting orientation');
-          const detection = await createTimeout(worker.detect(detectionCanvas), timeoutMs);
+          const detection = await createTimeout(
+            worker.detect(detectionCanvas),
+            timeoutMs
+          );
           detectedAngle = detection?.data?.orientation?.degrees ?? 0;
         } catch (detectError) {
-          console.warn('OCR orientation detection failed, using raw image', detectError);
+          console.warn(
+            'OCR orientation detection failed, using raw image',
+            detectError
+          );
         }
       }
 
@@ -240,10 +262,12 @@ export class OCRService {
       }
 
       options.onProgress?.(45, 'enhancing image for OCR');
-      const { canvas: preparedCanvas, meta: preprocessMeta } = await preprocessOcrSource(canvas, {
-        threshold: true,
-        maxSide: 1500,
-      });
+      const { canvas: preparedCanvas, meta: preprocessMeta } =
+        await preprocessOcrSource(canvas, {
+          maxSide: 1500,
+          denoise: true,
+          autoThreshold: true,
+        });
       const psm = await applyDynamicPageSegMode(worker, preprocessMeta);
 
       console.debug('[ocr]', {
@@ -251,6 +275,11 @@ export class OCRService {
         width: preprocessMeta.width,
         height: preprocessMeta.height,
         thresholdOn: preprocessMeta.thresholdOn,
+        averageBrightness: preprocessMeta.averageBrightness,
+        stdDeviation: preprocessMeta.stdDeviation,
+        denoiseApplied: preprocessMeta.denoiseApplied,
+        sourceAverage: preprocessMeta.sourceAverageBrightness,
+        sourceStdDev: preprocessMeta.sourceStdDeviation,
       });
 
       options.onProgress?.(70, 'recognizing text');
@@ -260,9 +289,22 @@ export class OCRService {
       const durationMs = performance.now() - start;
       const normalized = normalizeOcrResult(result);
       const words = extractWords(result);
-      const wordsConfidence = words.length ? median(words.map((word) => word.confidence)) : undefined;
-      const combinedConfidence = typeof wordsConfidence === 'number' ? wordsConfidence : normalized.confidence;
+      const wordsConfidence = words.length
+        ? median(words.map(word => word.confidence))
+        : undefined;
+      const combinedConfidence =
+        typeof wordsConfidence === 'number'
+          ? wordsConfidence
+          : normalized.confidence;
       const confidence = Math.max(0, Math.min(1, combinedConfidence));
+      const wordConfidences = words
+        .map(word => word.confidence)
+        .filter(value => Number.isFinite(value));
+      const avgWordConfidence =
+        wordConfidences.length > 0
+          ? wordConfidences.reduce((sum, value) => sum + value, 0) /
+            wordConfidences.length
+          : 0;
 
       const text = normalized.text;
       const ingredients = await this.extractIngredients(text);
@@ -272,6 +314,69 @@ export class OCRService {
       const nutritionFacts = this.parseNutritionFacts(text);
       const warnings = this.extractWarnings(text);
       const lowConfidence = confidence < LOW_CONFIDENCE_THRESHOLD;
+      const hasNutritionKeywords =
+        /vitamin|supplement|nutrition|calorie|ingredient|dietary/i.test(text);
+      const hasNumericData = /\d+(?:[.,]\d+)?\s?(?:mg|mcg|g|iu|%)/i.test(text);
+      const qualityScore = Math.min(
+        1,
+        confidence * 0.5 +
+          avgWordConfidence * 0.3 +
+          (hasNutritionKeywords ? 0.1 : 0) +
+          (hasNumericData ? 0.1 : 0)
+      );
+
+      const qualityMetrics = {
+        confidence,
+        wordCount: words.length,
+        avgWordConfidence,
+        textLength: text.length,
+        hasNutritionKeywords,
+        hasNumericData,
+        qualityScore,
+        medianWordConfidence: wordsConfidence ?? 0,
+        lowConfidenceThreshold: LOW_CONFIDENCE_THRESHOLD,
+        belowThreshold: lowConfidence,
+      };
+
+      const diagnostics = {
+        confidence,
+        normalizedConfidence: normalized.confidence,
+        medianWordConfidence: wordsConfidence ?? null,
+        lowConfidenceThreshold: LOW_CONFIDENCE_THRESHOLD,
+        belowThreshold: lowConfidence,
+        wordCount: words.length,
+        detectedOrientationDegrees: detectedAngle,
+        appliedRotationDegrees: canvas !== baseCanvas ? -detectedAngle : 0,
+        durationMs,
+        timestamp: new Date().toISOString(),
+        preprocess: {
+          width: preprocessMeta.width,
+          height: preprocessMeta.height,
+          thresholdOn: preprocessMeta.thresholdOn,
+          averageBrightness: preprocessMeta.averageBrightness,
+          stdDeviation: preprocessMeta.stdDeviation,
+          sourceAverageBrightness: preprocessMeta.sourceAverageBrightness,
+          sourceStdDeviation: preprocessMeta.sourceStdDeviation,
+          denoiseApplied: preprocessMeta.denoiseApplied,
+          autoThreshold: preprocessMeta.autoThreshold,
+        },
+      };
+
+      if (typeof window !== 'undefined') {
+        const diagnosticsBuffer =
+          (window as unknown as { __OCR_DIAGNOSTICS__?: OCRDiagnostics[] })
+            .__OCR_DIAGNOSTICS__ ?? [];
+        diagnosticsBuffer.push(diagnostics);
+        (
+          window as unknown as { __OCR_DIAGNOSTICS__?: OCRDiagnostics[] }
+        ).__OCR_DIAGNOSTICS__ = diagnosticsBuffer.slice(-20);
+      }
+
+      if (lowConfidence) {
+        console.warn('[ocr:diagnostics] low confidence result', diagnostics);
+      } else {
+        console.debug('[ocr:diagnostics]', diagnostics);
+      }
 
       options.onProgress?.(95, 'finalizing results');
 
@@ -286,7 +391,9 @@ export class OCRService {
         words,
         bbox: extractBoundingBoxes(result),
         errorCode: lowConfidence ? 'ocr_low_confidence' : undefined,
-        errorMessage: lowConfidence ? 'OCR confidence below threshold' : undefined,
+        errorMessage: lowConfidence
+          ? 'OCR confidence below threshold'
+          : undefined,
         ingredients,
         servingSize,
         brand,
@@ -294,6 +401,8 @@ export class OCRService {
         nutritionFacts,
         warnings,
         raw: result,
+        qualityMetrics,
+        diagnostics,
       };
     } catch (error) {
       const durationMs = performance.now() - start;
@@ -331,7 +440,8 @@ export class OCRService {
         confidence: 0,
         durationMs,
         errorCode: 'ocr_failed',
-        errorMessage: error instanceof Error ? error.message : 'Unknown OCR error',
+        errorMessage:
+          error instanceof Error ? error.message : 'Unknown OCR error',
         processingTime: durationMs,
       };
     } finally {
@@ -357,7 +467,7 @@ export class OCRService {
       /([A-Za-z\s\d\-]+):\s*(\d+(?:\.\d+)?)\s*(mg|mcg|g|iu|IU)\s*\((\d+%)\s*(?:Daily\s*Value|DV)\)/gi,
     ];
 
-    patterns.forEach((pattern) => {
+    patterns.forEach(pattern => {
       let match;
       while ((match = pattern.exec(ingredientsSection)) !== null) {
         const [, name, amount, unit, dailyValue] = match;
@@ -449,7 +559,11 @@ export class OCRService {
     const lines = text.split('\n').slice(0, 3);
     for (const line of lines) {
       const cleaned = line.trim();
-      if (cleaned.length > 2 && cleaned.length < 30 && /^[A-Za-z\s&'.]+$/.test(cleaned)) {
+      if (
+        cleaned.length > 2 &&
+        cleaned.length < 30 &&
+        /^[A-Za-z\s&'.]+$/.test(cleaned)
+      ) {
         return cleaned;
       }
     }
@@ -462,7 +576,11 @@ export class OCRService {
     for (let i = 0; i < Math.min(5, lines.length); i++) {
       const line = lines[i].trim();
       if (line.length < 3 || line.length > 50) continue;
-      if (/vitamin|mineral|supplement|complex|formula|extract|acid|protein/i.test(line)) {
+      if (
+        /vitamin|mineral|supplement|complex|formula|extract|acid|protein/i.test(
+          line
+        )
+      ) {
         return line;
       }
     }
@@ -470,17 +588,23 @@ export class OCRService {
   }
 
   private parseNutritionFacts(text: string): NutritionFacts | undefined {
-    const section = this.extractSection(text, ['supplement facts', 'nutrition facts']);
+    const section = this.extractSection(text, [
+      'supplement facts',
+      'nutrition facts',
+    ]);
     if (!section) return undefined;
 
     const servingMatch = section.match(/serving size[:\s]+([^\n]+)/i);
-    const servingsPerContainerMatch = section.match(/servings? per container[:\s]+([^\n]+)/i);
+    const servingsPerContainerMatch = section.match(
+      /servings? per container[:\s]+([^\n]+)/i
+    );
     const caloriesMatch = section.match(/calories[:\s]+([^\n]+)/i);
 
     const nutrients: ParsedIngredient[] = [];
     const lines = section.split('\n');
-    const nutrientPattern = /([A-Za-z\s\d\-]+)\s+(\d+(?:\.\d+)?)\s*(mg|mcg|g|iu|IU)\s*(?:\((\d+%)\s*(?:Daily\s*Value|DV)\))?/i;
-    lines.forEach((line) => {
+    const nutrientPattern =
+      /([A-Za-z\s\d\-]+)\s+(\d+(?:\.\d+)?)\s*(mg|mcg|g|iu|IU)\s*(?:\((\d+%)\s*(?:Daily\s*Value|DV)\))?/i;
+    lines.forEach(line => {
       const match = line.match(nutrientPattern);
       if (match) {
         const [, name, amount, unit, dailyValue] = match;
@@ -516,17 +640,19 @@ export class OCRService {
     if (warningSection) {
       warningSection
         .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line.length > 10)
-        .forEach((line) => warnings.push(line));
+        .map(line => line.trim())
+        .filter(line => line.length > 10)
+        .forEach(line => warnings.push(line));
     }
 
     return warnings;
   }
 
-  private removeDuplicateIngredients(ingredients: ParsedIngredient[]): ParsedIngredient[] {
+  private removeDuplicateIngredients(
+    ingredients: ParsedIngredient[]
+  ): ParsedIngredient[] {
     const seen = new Set<string>();
-    return ingredients.filter((ingredient) => {
+    return ingredients.filter(ingredient => {
       const key = ingredient.name.toLowerCase().trim();
       if (seen.has(key)) return false;
       seen.add(key);
