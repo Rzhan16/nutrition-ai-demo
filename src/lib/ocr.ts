@@ -1,386 +1,213 @@
-// @ts-nocheck
-
-import type { Worker as TesseractWorker } from 'tesseract.js';
-import {
-  applyDynamicPageSegMode,
-  getOcrWorker,
-  preprocessOcrSource,
-  type TesseractRecognizeResult,
-} from '@/lib/ocr/worker';
-import { cleanOcrText } from '@/lib/ocr/postprocess';
+import { callPaddleOCR, type PaddleOCRResponse } from '@/lib/ocr/paddle-client';
 import type {
   NutritionFacts,
   OCRBoundingBox,
+  OCRDiagnostics,
   OCRResult,
   OCRWord,
-  OCRDiagnostics,
   ParsedIngredient,
 } from '@/lib/types';
 
-export interface ImageEnhancementOptions {
-  autoRotate?: boolean;
-  enhanceContrast?: boolean;
-  reduceNoise?: boolean;
-  detectTextRegions?: boolean;
+interface ProcessOptions {
+  onProgress?: (value: number, status: string) => void;
+  signal?: AbortSignal;
+  timeoutMs?: number;
 }
 
-const DEFAULT_LANG = 'eng';
-const DEFAULT_TIMEOUT_MS = 7000;
-const LOW_CONFIDENCE_THRESHOLD = 0.8;
-const MAX_DIMENSION = 2048;
+const DEFAULT_CONFIDENCE_THRESHOLD = 0.8;
+const DEFAULT_TIMEOUT_MS = 10_000;
 
-const median = (values: number[]): number => {
+function getConfidenceThreshold(): number {
+  const value =
+    process.env.NEXT_PUBLIC_OCR_CONFIDENCE_MIN ??
+    process.env.OCR_CONFIDENCE_MIN ??
+    '';
+
+  const parsed = Number.parseFloat(value);
+  if (Number.isFinite(parsed)) {
+    return Math.min(0.99, Math.max(0.1, parsed));
+  }
+  return DEFAULT_CONFIDENCE_THRESHOLD;
+}
+
+function getTimeoutMs(custom?: number): number {
+  if (typeof custom === 'number' && Number.isFinite(custom) && custom > 0) {
+    return custom;
+  }
+  const value =
+    process.env.NEXT_PUBLIC_OCR_TIMEOUT_MS ??
+    process.env.OCR_TIMEOUT_MS ??
+    '';
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return parsed;
+  }
+  return DEFAULT_TIMEOUT_MS;
+}
+
+function mapWords(words: PaddleOCRResponse['words'] = []): OCRWord[] {
+  return words.map(word => {
+    const [x0 = 0, y0 = 0, x1 = 0, y1 = 0] = word.bbox ?? [];
+    const bbox: OCRBoundingBox = {
+      x: x0,
+      y: y0,
+      width: Math.max(0, x1 - x0),
+      height: Math.max(0, y1 - y0),
+    };
+    return {
+      text: word.text ?? '',
+      confidence: typeof word.confidence === 'number' ? word.confidence : 0,
+      bbox,
+    } satisfies OCRWord;
+  });
+}
+
+function median(values: number[]): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 === 0
     ? (sorted[mid - 1] + sorted[mid]) / 2
     : sorted[mid];
-};
+}
 
-const loadImage = async (file: File): Promise<HTMLImageElement> => {
-  const url = URL.createObjectURL(file);
-  try {
-    const image = new Image();
-    await new Promise<void>((resolve, reject) => {
-      image.onload = () => resolve();
-      image.onerror = () => reject(new Error('Failed to load image'));
-      image.src = url;
-    });
-    return image;
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-};
+function calculateQualityMetrics(
+  text: string,
+  words: OCRWord[],
+  confidence: number,
+  threshold: number
+): NonNullable<OCRResult['qualityMetrics']> {
+  const confidences = words.map(word => word.confidence).filter(Boolean);
+  const avgWordConfidence = confidences.length
+    ? confidences.reduce((sum, value) => sum + value, 0) / confidences.length
+    : confidence;
 
-const createCanvas = (width: number, height: number): HTMLCanvasElement => {
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  return canvas;
-};
+  const nutritionKeywords = [
+    'supplement facts',
+    'nutrition facts',
+    'ingredients',
+    'serving size',
+    'daily value',
+    'calories',
+    'vitamin',
+    'mineral',
+  ];
 
-const downscaleImage = (image: HTMLImageElement): HTMLCanvasElement => {
-  const maxDimension = Math.max(image.width, image.height);
-  if (maxDimension <= MAX_DIMENSION) {
-    const canvas = createCanvas(image.width, image.height);
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('Canvas context unavailable');
-    ctx.drawImage(image, 0, 0);
-    return canvas;
-  }
-
-  const scale = MAX_DIMENSION / maxDimension;
-  const width = Math.round(image.width * scale);
-  const height = Math.round(image.height * scale);
-  const canvas = createCanvas(width, height);
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Canvas context unavailable');
-  ctx.drawImage(image, 0, 0, width, height);
-  return canvas;
-};
-
-const rotateCanvas = (
-  source: HTMLCanvasElement,
-  angleDeg: number
-): HTMLCanvasElement => {
-  if (!angleDeg) return source;
-  const angle = (angleDeg * Math.PI) / 180;
-  const sin = Math.abs(Math.sin(angle));
-  const cos = Math.abs(Math.cos(angle));
-  const width = source.width;
-  const height = source.height;
-  const newWidth = Math.floor(width * cos + height * sin);
-  const newHeight = Math.floor(width * sin + height * cos);
-  const canvas = createCanvas(newWidth, newHeight);
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Canvas context unavailable');
-  ctx.translate(newWidth / 2, newHeight / 2);
-  ctx.rotate(angle);
-  ctx.drawImage(source, -width / 2, -height / 2);
-  return canvas;
-};
-
-const extractWords = (result: TesseractRecognizeResult): OCRWord[] => {
-  const words = result.data?.words ?? [];
-  return words.map(word => ({
-    text: word.text,
-    confidence: (word.confidence ?? 0) / 100,
-    bbox: word.bbox
-      ? {
-          x: word.bbox.x0 ?? 0,
-          y: word.bbox.y0 ?? 0,
-          width: (word.bbox.x1 ?? 0) - (word.bbox.x0 ?? 0),
-          height: (word.bbox.y1 ?? 0) - (word.bbox.y0 ?? 0),
-        }
-      : undefined,
-  }));
-};
-
-const extractBoundingBoxes = (
-  result: TesseractRecognizeResult
-): OCRBoundingBox[] => {
-  const words = result.data?.words ?? [];
-  return words.map(word => ({
-    x: word.bbox?.x0 ?? 0,
-    y: word.bbox?.y0 ?? 0,
-    width: (word.bbox?.x1 ?? 0) - (word.bbox?.x0 ?? 0),
-    height: (word.bbox?.y1 ?? 0) - (word.bbox?.y0 ?? 0),
-  }));
-};
-
-const createTimeout = <T>(promise: Promise<T>, timeoutMs: number): Promise<T> =>
-  new Promise<T>((resolve, reject) => {
-    const timeoutId = setTimeout(() => {
-      reject(new Error('OCR timeout'));
-    }, timeoutMs);
-
-    promise
-      .then(value => {
-        clearTimeout(timeoutId);
-        resolve(value);
-      })
-      .catch(error => {
-        clearTimeout(timeoutId);
-        reject(error);
-      });
-  });
-
-type NormalizedOcr = { text: string; confidence: number };
-
-const normalizeOcrResult = (
-  result: TesseractRecognizeResult
-): NormalizedOcr => {
-  const data = result?.data;
-  const rawConfidence =
-    typeof data?.confidence === 'number' ? data.confidence : 0;
-  const normalizedConfidence =
-    rawConfidence > 1 ? rawConfidence / 100 : rawConfidence;
-  const confidence = Math.max(0, Math.min(1, normalizedConfidence));
-  const text = cleanOcrText(data?.text ?? '');
+  const lower = text.toLowerCase();
+  const hasNutritionKeywords = nutritionKeywords.some(keyword =>
+    lower.includes(keyword)
+  );
+  const hasNumericData = /\b\d+(?:\.\d+)?\s*(mg|mcg|g|iu|%)\b/i.test(text);
+  const qualityScore = Math.min(
+    1,
+    (confidence * 0.5 + avgWordConfidence * 0.35 +
+      (hasNutritionKeywords ? 0.1 : 0) +
+      (hasNumericData ? 0.05 : 0))
+  );
 
   return {
-    text,
     confidence,
+    wordCount: words.length,
+    avgWordConfidence,
+    medianWordConfidence: confidences.length ? median(confidences) : confidence,
+    textLength: text.length,
+    hasNutritionKeywords,
+    hasNumericData,
+    qualityScore,
+    lowConfidenceThreshold: threshold,
+    belowThreshold: confidence < threshold,
   };
-};
+}
+
+function buildDiagnostics(
+  confidence: number,
+  metrics: NonNullable<OCRResult['qualityMetrics']>,
+  durationMs: number,
+  response: PaddleOCRResponse
+): OCRDiagnostics {
+  return {
+    confidence,
+    normalizedConfidence: confidence,
+    medianWordConfidence: metrics.medianWordConfidence ?? confidence,
+    lowConfidenceThreshold: metrics.lowConfidenceThreshold,
+    belowThreshold: metrics.belowThreshold,
+    wordCount: metrics.wordCount,
+    detectedOrientationDegrees: response.orientation?.angle ?? 0,
+    orientationConfidence: response.orientation?.confidence,
+    appliedRotationDegrees: 0,
+    durationMs,
+    timestamp: new Date().toISOString(),
+    preprocess: {
+      width: 0,
+      height: 0,
+      thresholdOn: false,
+      averageBrightness: 0,
+      stdDeviation: 0,
+      sourceAverageBrightness: 0,
+      sourceStdDeviation: 0,
+      denoiseApplied: false,
+      autoThreshold: false,
+    },
+  };
+}
 
 export class OCRService {
-  private worker: TesseractWorker | null = null;
-  private initializing: Promise<void> | null = null;
-
-  private get language(): string {
-    return (
-      (process.env.NEXT_PUBLIC_OCR_LANG || DEFAULT_LANG).trim() || DEFAULT_LANG
-    );
-  }
-
-  private async ensureWorker(): Promise<TesseractWorker> {
-    if (this.worker) return this.worker;
-
-    if (!this.initializing) {
-      this.initializing = getOcrWorker()
-        .then(instance => {
-          this.worker = instance;
-        })
-        .finally(() => {
-          this.initializing = null;
-        });
-    }
-
-    await this.initializing;
-    if (!this.worker) {
-      throw new Error('Failed to initialize OCR worker');
-    }
-    return this.worker;
-  }
-
-  async processImage(
-    imageFile: File,
-    options: {
-      onProgress?: (value: number, status: string) => void;
-      signal?: AbortSignal;
-      timeoutMs?: number;
-    } = {}
-  ): Promise<OCRResult> {
+  async processImage(file: File, options: ProcessOptions = {}): Promise<OCRResult> {
     if (typeof window === 'undefined') {
-      throw new Error('OCR is only available in the browser');
+      throw new Error('OCR is only available in the browser environment');
     }
 
+    const threshold = getConfidenceThreshold();
+    const timeoutMs = getTimeoutMs(options.timeoutMs);
     const start = performance.now();
-    const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
-    if (options.signal?.aborted) {
-      return {
-        ok: false,
-        text: '',
-        confidence: 0,
-        durationMs: 0,
-        wasAborted: true,
-        errorCode: 'ocr_failed',
-        errorMessage: 'OCR aborted prior to start',
-      };
-    }
-
-    const abortHandler = () => {
-      this.cancelCurrentJob().catch(() => undefined);
-    };
-    options.signal?.addEventListener('abort', abortHandler, { once: true });
+    options.onProgress?.(5, 'Uploading image to OCR service');
 
     try {
-      options.onProgress?.(5, 'initializing OCR worker');
-      const worker = await this.ensureWorker();
+      const result = await callPaddleOCR(file, options.signal, timeoutMs);
 
-      const image = await loadImage(imageFile);
-      options.onProgress?.(10, 'preprocessing image');
-      const baseCanvas = downscaleImage(image);
+      options.onProgress?.(60, 'Parsing OCR response');
 
-      const detectionCanvas = createCanvas(baseCanvas.width, baseCanvas.height);
-      const detectionCtx = detectionCanvas.getContext('2d');
-      detectionCtx?.drawImage(baseCanvas, 0, 0);
-
-      let detectedAngle = 0;
-      if (typeof worker.detect === 'function') {
-        try {
-          options.onProgress?.(35, 'detecting orientation');
-          const detection = await createTimeout(
-            worker.detect(detectionCanvas),
-            timeoutMs
-          );
-          detectedAngle = detection?.data?.orientation?.degrees ?? 0;
-        } catch (detectError) {
-          console.warn(
-            'OCR orientation detection failed, using raw image',
-            detectError
-          );
-        }
-      }
-
-      let canvas = baseCanvas;
-      if (detectedAngle && Math.abs(detectedAngle) > 1) {
-        canvas = rotateCanvas(baseCanvas, -detectedAngle);
-      }
-
-      options.onProgress?.(45, 'enhancing image for OCR');
-      const { canvas: preparedCanvas, meta: preprocessMeta } =
-        await preprocessOcrSource(canvas, {
-          maxSide: 1500,
-          denoise: true,
-          autoThreshold: true,
-        });
-      const psm = await applyDynamicPageSegMode(worker, preprocessMeta);
-
-      console.debug('[ocr]', {
-        psm,
-        width: preprocessMeta.width,
-        height: preprocessMeta.height,
-        thresholdOn: preprocessMeta.thresholdOn,
-        averageBrightness: preprocessMeta.averageBrightness,
-        stdDeviation: preprocessMeta.stdDeviation,
-        denoiseApplied: preprocessMeta.denoiseApplied,
-        sourceAverage: preprocessMeta.sourceAverageBrightness,
-        sourceStdDev: preprocessMeta.sourceStdDeviation,
-      });
-
-      options.onProgress?.(70, 'recognizing text');
-      const recognizePromise = worker.recognize(preparedCanvas);
-      const result = await createTimeout(recognizePromise, timeoutMs);
+      const text = (result.text ?? '').trim();
+      const words = mapWords(result.words);
+      const confidences = words.map(word => word.confidence).filter(Boolean);
+      const confidence = confidences.length
+        ? confidences.reduce((sum, value) => sum + value, 0) / confidences.length
+        : text.length > 0
+        ? 0.5
+        : 0;
 
       const durationMs = performance.now() - start;
-      const normalized = normalizeOcrResult(result);
-      const words = extractWords(result);
-      const wordsConfidence = words.length
-        ? median(words.map(word => word.confidence))
-        : undefined;
-      const combinedConfidence =
-        typeof wordsConfidence === 'number'
-          ? wordsConfidence
-          : normalized.confidence;
-      const confidence = Math.max(0, Math.min(1, combinedConfidence));
-      const wordConfidences = words
-        .map(word => word.confidence)
-        .filter(value => Number.isFinite(value));
-      const avgWordConfidence =
-        wordConfidences.length > 0
-          ? wordConfidences.reduce((sum, value) => sum + value, 0) /
-            wordConfidences.length
-          : 0;
 
-      const text = normalized.text;
+      const qualityMetrics = calculateQualityMetrics(
+        text,
+        words,
+        confidence,
+        threshold
+      );
+
+      const diagnostics = buildDiagnostics(
+        confidence,
+        qualityMetrics,
+        durationMs,
+        result
+      );
+
+      options.onProgress?.(75, 'Extracting nutrition insights');
+
       const ingredients = await this.extractIngredients(text);
       const servingSize = this.extractServingSize(text);
       const brand = this.extractBrandName(text);
       const productName = this.extractProductName(text);
       const nutritionFacts = this.parseNutritionFacts(text);
       const warnings = this.extractWarnings(text);
-      const lowConfidence = confidence < LOW_CONFIDENCE_THRESHOLD;
-      const hasNutritionKeywords =
-        /vitamin|supplement|nutrition|calorie|ingredient|dietary/i.test(text);
-      const hasNumericData = /\d+(?:[.,]\d+)?\s?(?:mg|mcg|g|iu|%)/i.test(text);
-      const qualityScore = Math.min(
-        1,
-        confidence * 0.5 +
-          avgWordConfidence * 0.3 +
-          (hasNutritionKeywords ? 0.1 : 0) +
-          (hasNumericData ? 0.1 : 0)
-      );
 
-      const qualityMetrics = {
-        confidence,
-        wordCount: words.length,
-        avgWordConfidence,
-        textLength: text.length,
-        hasNutritionKeywords,
-        hasNumericData,
-        qualityScore,
-        medianWordConfidence: wordsConfidence ?? 0,
-        lowConfidenceThreshold: LOW_CONFIDENCE_THRESHOLD,
-        belowThreshold: lowConfidence,
-      };
+      const lowConfidence = confidence < threshold;
+      const boundingBoxes: OCRBoundingBox[] = words
+        .map(word => word.bbox)
+        .filter((bbox): bbox is OCRBoundingBox => Boolean(bbox));
 
-      const diagnostics = {
-        confidence,
-        normalizedConfidence: normalized.confidence,
-        medianWordConfidence: wordsConfidence ?? null,
-        lowConfidenceThreshold: LOW_CONFIDENCE_THRESHOLD,
-        belowThreshold: lowConfidence,
-        wordCount: words.length,
-        detectedOrientationDegrees: detectedAngle,
-        appliedRotationDegrees: canvas !== baseCanvas ? -detectedAngle : 0,
-        durationMs,
-        timestamp: new Date().toISOString(),
-        preprocess: {
-          width: preprocessMeta.width,
-          height: preprocessMeta.height,
-          thresholdOn: preprocessMeta.thresholdOn,
-          averageBrightness: preprocessMeta.averageBrightness,
-          stdDeviation: preprocessMeta.stdDeviation,
-          sourceAverageBrightness: preprocessMeta.sourceAverageBrightness,
-          sourceStdDeviation: preprocessMeta.sourceStdDeviation,
-          denoiseApplied: preprocessMeta.denoiseApplied,
-          autoThreshold: preprocessMeta.autoThreshold,
-        },
-      };
-
-      if (typeof window !== 'undefined') {
-        const diagnosticsBuffer =
-          (window as unknown as { __OCR_DIAGNOSTICS__?: OCRDiagnostics[] })
-            .__OCR_DIAGNOSTICS__ ?? [];
-        diagnosticsBuffer.push(diagnostics);
-        (
-          window as unknown as { __OCR_DIAGNOSTICS__?: OCRDiagnostics[] }
-        ).__OCR_DIAGNOSTICS__ = diagnosticsBuffer.slice(-20);
-      }
-
-      if (lowConfidence) {
-        console.warn('[ocr:diagnostics] low confidence result', diagnostics);
-      } else {
-        console.debug('[ocr:diagnostics]', diagnostics);
-      }
-
-      options.onProgress?.(95, 'finalizing results');
-
-      options.onProgress?.(100, 'complete');
+      options.onProgress?.(100, 'OCR complete');
 
       return {
         ok: !lowConfidence,
@@ -389,10 +216,10 @@ export class OCRService {
         durationMs,
         processingTime: durationMs,
         words,
-        bbox: extractBoundingBoxes(result),
+        bbox: boundingBoxes,
         errorCode: lowConfidence ? 'ocr_low_confidence' : undefined,
         errorMessage: lowConfidence
-          ? 'OCR confidence below threshold'
+          ? 'OCR confidence below configured threshold'
           : undefined,
         ingredients,
         servingSize,
@@ -400,52 +227,48 @@ export class OCRService {
         productName,
         nutritionFacts,
         warnings,
-        raw: result,
         qualityMetrics,
         diagnostics,
+        raw: result,
       };
     } catch (error) {
       const durationMs = performance.now() - start;
-      const progressStatus = options.signal?.aborted ? 'cancelled' : 'failed';
-      options.onProgress?.(100, progressStatus);
-      if (error instanceof DOMException && error.name === 'AbortError') {
+
+      if (options.signal?.aborted) {
         return {
           ok: false,
           text: '',
           confidence: 0,
           durationMs,
+          processingTime: durationMs,
           wasAborted: true,
-          errorCode: 'ocr_failed',
-          errorMessage: 'OCR aborted',
-          processingTime: durationMs,
+          errorCode: 'ocr_aborted',
+          errorMessage: 'OCR request aborted',
         };
       }
 
-      if (error instanceof Error && error.message === 'OCR timeout') {
+      if ((error as Error).message === 'ocr-timeout') {
         return {
           ok: false,
           text: '',
           confidence: 0,
           durationMs,
-          errorCode: 'ocr_timeout',
-          errorMessage: 'OCR timed out',
           processingTime: durationMs,
+          errorCode: 'ocr_timeout',
+          errorMessage: `OCR request exceeded ${timeoutMs}ms timeout`,
         };
       }
 
-      console.error('OCR processing failed:', error);
       return {
         ok: false,
         text: '',
         confidence: 0,
         durationMs,
+        processingTime: durationMs,
         errorCode: 'ocr_failed',
         errorMessage:
-          error instanceof Error ? error.message : 'Unknown OCR error',
-        processingTime: durationMs,
+          error instanceof Error ? error.message : 'Unknown OCR failure',
       };
-    } finally {
-      options.signal?.removeEventListener('abort', abortHandler);
     }
   }
 
@@ -481,20 +304,6 @@ export class OCRService {
     });
 
     return this.removeDuplicateIngredients(ingredients);
-  }
-
-  async cleanup(): Promise<void> {
-    if (this.worker) {
-      await this.worker.terminate();
-      this.worker = null;
-    }
-  }
-
-  async cancelCurrentJob(): Promise<void> {
-    if (this.worker) {
-      await this.worker.terminate();
-      this.worker = null;
-    }
   }
 
   private extractSection(text: string, keywords: string[]): string | null {
@@ -584,6 +393,7 @@ export class OCRService {
         return line;
       }
     }
+
     return undefined;
   }
 

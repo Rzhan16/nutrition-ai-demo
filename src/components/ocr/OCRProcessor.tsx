@@ -6,10 +6,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Camera, Upload, Zap, AlertCircle, CheckCircle, X } from 'lucide-react';
 import type { OCRResult } from '@/lib/types';
 import { barcodeService, BarcodeResult } from '@/lib/barcode';
-import type { RecognizeResult } from 'tesseract.js';
-import { getOcrWorker } from '@/lib/ocr/worker';
-import type { TesseractLoggerMessage } from '@/lib/ocr/worker';
-import { fileToCanvas } from '@/lib/ocr/preprocess';
+import { ocrService } from '@/lib/ocr';
 
 interface OCRProcessorProps {
   onResult: (result: OCRResult | BarcodeResult) => void;
@@ -47,6 +44,7 @@ export function OCRProcessor({ onResult, onError, className = '' }: OCRProcessor
   const frameLoopRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const isProcessingRef = useRef(false);
+  const ocrAbortRef = useRef<AbortController | null>(null);
   const [isUsingCamera, setIsUsingCamera] = useState<boolean>(false);
   const [, setStream] = useState<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState<string>('');
@@ -119,6 +117,9 @@ export function OCRProcessor({ onResult, onError, className = '' }: OCRProcessor
   const cleanupResources = useCallback(() => {
     try {
       stopLiveScan();
+      ocrAbortRef.current?.abort();
+      ocrAbortRef.current = null;
+      isProcessingRef.current = false;
       barcodeService.cleanup();
     } catch (error) {
       console.warn('Error during cleanup:', error);
@@ -186,73 +187,59 @@ export function OCRProcessor({ onResult, onError, className = '' }: OCRProcessor
       }
 
       if (scanMode === 'ocr' || scanMode === 'both') {
-        updateProgress('enhancing', 50, 'Preparing image for OCR');
-        const canvas = await fileToCanvas(file, 1600);
         updateProgress('extracting_text', 60, 'Running OCR');
+        const controller = new AbortController();
+        ocrAbortRef.current?.abort();
+        ocrAbortRef.current = controller;
+        const startedAt = performance.now();
 
-        const recognitionStartedAt = performance.now();
-        const worker = await getOcrWorker((message: TesseractLoggerMessage) => {
-          if (typeof message.progress === 'number') {
-            const percent = Math.round(Math.min(1, Math.max(0, message.progress)) * 100);
-            setProcessingState((prev) => ({
-              ...prev,
-              stage: 'extracting_text',
-              progress: Math.max(prev.progress, percent),
-              status: message.status ?? prev.status,
-            }));
-          } else if (message.status) {
-            setProcessingState((prev) => ({
-              ...prev,
-              status: message.status,
-            }));
-          }
-        });
+        try {
+          const ocrResult = await ocrService.processImage(file, {
+            signal: controller.signal,
+            timeoutMs: 15000,
+            onProgress: (value, status) => {
+              setProcessingState(prev => ({
+                ...prev,
+                stage: 'extracting_text',
+                progress: Math.max(prev.progress, Math.min(100, Math.round(value))),
+                status,
+              }));
+            },
+          });
 
-        const recognizePromise: Promise<RecognizeResult> = worker.recognize(canvas as HTMLCanvasElement);
-        const recognition = await Promise.race([
-          recognizePromise,
-          new Promise<never>((_, reject) => {
-            const timeoutId = window.setTimeout(() => {
-              reject(new Error('OCR timeout'));
-            }, 30000);
-            recognizePromise.then(
-              () => window.clearTimeout(timeoutId),
-              () => window.clearTimeout(timeoutId),
+          const durationMs = Math.round(performance.now() - startedAt);
+          updateProgress('parsing', 90, 'Parsing OCR results');
+
+          setDetectedText(ocrResult.text ?? '');
+          setConfidence(ocrResult.confidence ?? 0);
+          setManualEdit(ocrResult.text ?? '');
+
+          const normalizedResult: OCRResult = {
+            ...ocrResult,
+            durationMs,
+            processingTime: durationMs,
+          };
+
+          if (
+            !normalizedResult.ok &&
+            normalizedResult.errorCode &&
+            normalizedResult.errorCode !== 'ocr_low_confidence'
+          ) {
+            throw new Error(
+              normalizedResult.errorMessage || 'OCR service failed'
             );
-          }),
-        ]);
+          }
 
-        const durationMs = Math.round(performance.now() - recognitionStartedAt);
-        const text = recognition.data?.text ?? '';
-        const confidenceRaw = recognition.data?.confidence;
-        const confidenceScore = typeof confidenceRaw === 'number' ? confidenceRaw / 100 : 0;
-        const warningsRaw = (recognition.data as { warnings?: unknown } | undefined)?.warnings ?? [];
-        const warnings = Array.isArray(warningsRaw)
-          ? warningsRaw.filter((item): item is string => typeof item === 'string')
-          : [];
+          updateProgress('complete', 100, 'OCR complete');
+          setProcessingState({ isProcessing: false, progress: 100, stage: 'complete', status: 'OCR complete' });
 
-        updateProgress('parsing', 90, 'Parsing OCR results');
-
-        setDetectedText(text);
-        setConfidence(confidenceScore);
-        setManualEdit(text);
-
-        const ocrResult: OCRResult = {
-          ok: confidenceScore >= 0.8,
-          text,
-          confidence: confidenceScore,
-          durationMs,
-          processingTime: durationMs,
-          warnings,
-        };
-
-        updateProgress('complete', 100, 'OCR complete');
-        setProcessingState({ isProcessing: false, progress: 100, stage: 'complete', status: 'OCR complete' });
-
-        if (confidenceScore < 0.8) {
-          setShowManualEdit(true);
-        } else {
-          onResult(ocrResult);
+          if (!normalizedResult.ok) {
+            setShowManualEdit(true);
+          } else {
+            onResult(normalizedResult);
+          }
+        } finally {
+          ocrAbortRef.current = null;
         }
       } else {
         setProcessingState({ isProcessing: false, progress: 100, stage: 'complete', status: 'Completed' });

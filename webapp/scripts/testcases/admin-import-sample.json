@@ -1,0 +1,11 @@
+{
+  "entries": [
+    { "pool": "brand", "value": "Oceanic Labs" },
+    { "pool": "product", "value": "Deep Sea Omega" },
+    { "pool": "ingredient", "value": "Astaxanthin" }
+  ],
+  "equivalents": [
+    { "canonical": "omega-3", "aliases": ["epa dha", "fish oil"] },
+    { "canonical": "vitamin b12", "aliases": ["cyanocobalamin"] }
+  ]
+}

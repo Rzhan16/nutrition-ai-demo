@@ -7,7 +7,23 @@ Object.defineProperty(window, 'fetch', {
   value: jest.fn(() =>
     Promise.resolve({
       ok: true,
-      json: () => Promise.resolve({}),
+      json: () =>
+        Promise.resolve({
+          engine: 'paddle',
+          text: 'Mocked OCR text',
+          words: [
+            {
+              text: 'Mocked',
+              confidence: 0.9,
+              bbox: [0, 0, 10, 10],
+              line_id: 0,
+              block_id: 0,
+            },
+          ],
+          orientation: { angle: 0, confidence: 1 },
+          cached: false,
+          elapsed_ms: 1234,
+        }),
     })
   ),
 });
@@ -49,24 +65,6 @@ Object.defineProperty(navigator, 'mediaDevices', {
     enumerateDevices: jest.fn(() => Promise.resolve([])),
   },
 });
-
-// Mock Tesseract.js
-jest.mock('tesseract.js', () => ({
-  createWorker: jest.fn(() => ({
-    load: jest.fn(),
-    loadLanguage: jest.fn(),
-    initialize: jest.fn(),
-    recognize: jest.fn(() =>
-      Promise.resolve({
-        data: {
-          text: 'Mocked OCR text',
-          confidence: 85,
-        },
-      })
-    ),
-    terminate: jest.fn(),
-  })),
-}));
 
 // Mock ZXing
 jest.mock('@zxing/browser', () => ({

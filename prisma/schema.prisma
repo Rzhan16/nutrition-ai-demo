@@ -27,12 +27,29 @@ model Scan {
   supplementId String?
   imageUrl     String
   ocrText      String?
+  ocrConfidence Float?
+  ocrData      Json?
   analysis     Json?    // AI analysis result
   userId       String?  // Browser fingerprint
   createdAt    DateTime @default(now())
-  
+
   supplement   Supplement? @relation(fields: [supplementId], references: [id])
+  cacheEntries OcrCacheEntry[]
   @@map("scans")
+}
+
+model OcrCacheEntry {
+  id             String   @id @default(cuid())
+  hash           String   @unique
+  scanId         String
+  userId         String?
+  createdAt      DateTime @default(now())
+  lastAccessedAt DateTime @default(now())
+  expiresAt      DateTime
+
+  scan Scan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@map("ocr_cache_entries")
 }
 
 model User {

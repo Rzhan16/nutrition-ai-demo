@@ -203,7 +203,7 @@ nutrition-ai-demo/
 ## 🧪 Test Scanner – Step 8
 
 - Start the dev server with `npm run dev` and open [http://localhost:3000/test-scanner](http://localhost:3000/test-scanner) to exercise the barcode → OCR → analyze → search flow.
-- Runtime flags: the scanner reads the standard `NEXT_PUBLIC_API_URL` for API routing and `NEXT_PUBLIC_OCR_LANG` for OCR language selection; no write access or new environment variables are required for this step.
+- Runtime flags: the scanner reads the standard `NEXT_PUBLIC_API_URL` for API routing and `NEXT_PUBLIC_OCR_LANG` for OCR language selection. To enable the Paddle OCR microservice in production, set `NEXT_PUBLIC_OCR_ENGINE=paddle`, point `NEXT_PUBLIC_PADDLE_OCR_URL` at your deployed service (for example `https://ocr.example.com`), and use `NEXT_PUBLIC_OCR_TIMEOUT_MS` / `NEXT_PUBLIC_OCR_CONFIDENCE_MIN` to tune timeouts and quality thresholds. Leave `NEXT_PUBLIC_TESSERACT_ENABLED=true` only if you want automatic fallback to the in-browser worker.
 - Open the Debug Drawer via the gear icon in the top-right corner to toggle engines, force OCR, inspect raw JSON, view timing metrics, and review the last eight sessions recorded in the in-memory history list.
 - Common issues:
   - **Camera permission denied** – the page surfaces a toast and guidance banner; grant access in the browser settings and retry.

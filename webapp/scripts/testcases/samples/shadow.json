@@ -1,0 +1,23 @@
+{
+  "item": {
+    "brand": "Wellness Co",
+    "product": "Daily Multi"
+  },
+  "imgPath": "sample-shadow-image",
+  "ocr": {
+    "words": [
+      {
+        "text": "vitamln",
+        "confidence": 0.42,
+        "line_id": 3,
+        "bbox": [0, 120, 120, 140]
+      },
+      {
+        "text": "complex",
+        "confidence": 0.6,
+        "line_id": 3,
+        "bbox": [130, 120, 240, 140]
+      }
+    ]
+  }
+}

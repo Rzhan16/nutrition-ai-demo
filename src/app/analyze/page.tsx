@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, type MutableRefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { UploadPanel } from '@/components/analyze/UploadPanel';
 import { ScanResultPanel } from '@/components/analyze/ScanResultPanel';
 import { AnalyzePanel } from '@/components/analyze/AnalyzePanel';
@@ -11,7 +11,7 @@ import { StatusStepper, type StepperItem } from '@/components/analyze/StatusStep
 import { SearchBox } from '@/components/search/SearchBox';
 import { apiClient, APIError, type AnalyzeInput } from '@/lib/api-client';
 import { ocrService } from '@/lib/ocr';
-import type { OCRResult } from '@/lib/types';
+import type { AnalysisResponse, OCRResult } from '@/lib/types';
 import { useAnalyzeState } from '@/components/analyze/useAnalyzeState';
 import type { AnalysisState, OcrState, SearchState, UploadedFileInfo, HistoryEntry } from '@/types/analyze';
 import { ToastProvider, useToast } from '@/components/ui/ToastProvider';
@@ -39,6 +39,8 @@ function AnalyzeExperience() {
   const searchAbortRef: MutableRefObject<AbortController | null> = useRef<AbortController | null>(null);
   const searchCacheRef = useRef<Map<string, { expiry: number; state: SearchState }>>(new Map());
   const timerRef = useRef(createTimer());
+  const historyLoadedRef = useRef(false);
+  const [searchStatusMessage, setSearchStatusMessage] = useState<string | null>(null);
 
   useEffect(() => {
     return () => {
@@ -51,6 +53,97 @@ function AnalyzeExperience() {
       searchAbortRef.current?.abort();
     };
   }, []);
+
+  useEffect(() => {
+    if (historyLoadedRef.current) {
+      return;
+    }
+    historyLoadedRef.current = true;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const history = await apiClient.getScanHistory({ limit: 8 }, { retries: 1, timeoutMs: 10_000 });
+        if (cancelled || !history?.scans?.length) {
+          return;
+        }
+
+        const scans = history.scans.slice().reverse();
+        scans.forEach(scan => {
+          const timestamp = new Date(scan.createdAt).getTime();
+          const ocrData = (scan.ocrData ?? null) as Partial<OCRResult> | null;
+          const ocrState: OcrState = {
+            ok: (ocrData?.ok ?? true) && Boolean(scan.ocrText),
+            text: scan.ocrText ?? ocrData?.text ?? '',
+            confidence: scan.ocrConfidence ?? ocrData?.confidence ?? 0,
+            durationMs: ocrData?.durationMs ?? 0,
+            processingTime: ocrData?.processingTime,
+            words: ocrData?.words,
+            bbox: ocrData?.bbox,
+            barcode: ocrData?.barcode,
+            ingredients: ocrData?.ingredients ?? [],
+            servingSize: ocrData?.servingSize,
+            brand: ocrData?.brand,
+            productName: ocrData?.productName,
+            nutritionFacts: ocrData?.nutritionFacts,
+            warnings: ocrData?.warnings,
+            qualityMetrics: ocrData?.qualityMetrics,
+            diagnostics: ocrData?.diagnostics,
+            scanId: scan.id,
+          };
+
+          const analysisRaw = scan.analysis as Partial<AnalysisResponse> | null;
+          const analysisState: AnalysisState | undefined = analysisRaw
+            ? {
+                supplementName: analysisRaw.supplementName ?? 'Unknown supplement',
+                brand: analysisRaw.brand,
+                confidence: analysisRaw.confidence ?? 0,
+                analysis: analysisRaw.analysis ?? {
+                  basicIntroduction: '',
+                  primaryBenefits: '',
+                  rdaGuidelines: '',
+                  safetyLimits: '',
+                  dietarySources: '',
+                  supplementForms: '',
+                  usageScenarios: '',
+                  risksPrecautions: '',
+                },
+                ingredients: analysisRaw.ingredients ?? [],
+                warnings: analysisRaw.warnings ?? [],
+                recommendations: analysisRaw.recommendations ?? [],
+                references: analysisRaw.references ?? [],
+                scanId: scan.id,
+                supplementId: analysisRaw.supplementId,
+                cached: Boolean(analysisRaw.cached),
+                ocrConfidence: analysisRaw.ocrConfidence ?? (ocrData?.confidence ?? scan.ocrConfidence ?? 0),
+                analysisMethod: analysisRaw.analysisMethod,
+                sources: analysisRaw.sources ?? [],
+                startedAt: timestamp,
+                completedAt: timestamp,
+                durationMs: 0,
+                source: 'live',
+              }
+            : undefined;
+
+          dispatch({
+            type: 'ADD_HISTORY',
+            payload: {
+              id: scan.id,
+              timestamp,
+              ocr: ocrState,
+              analysis: analysisState,
+            },
+          });
+        });
+      } catch (error) {
+        console.warn('Failed to load scan history', error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch]);
 
   const setUploadProgress = useCallback((value: number) => {
     dispatch({ type: 'UPLOAD_PROGRESS', value });
@@ -98,8 +191,9 @@ function AnalyzeExperience() {
     analysisState: AnalysisState | null,
   ) => {
     if (!analysisState) return;
+    const historyId = analysisState.scanId ?? generateId();
     const entry: HistoryEntry = {
-      id: generateId(),
+      id: historyId,
       timestamp: Date.now(),
       upload: state.upload
         ? {
@@ -119,22 +213,30 @@ function AnalyzeExperience() {
     origin: 'auto' | 'manual',
     analysisOverride?: AnalysisState | null,
   ) => {
-    if (!query.trim()) {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) {
+      setSearchStatusMessage(null);
       return;
     }
-    const normalized = query.trim().toLowerCase();
+
+    const normalized = trimmedQuery.toLowerCase();
+    console.log('[DEBUG] executeSearch start', { origin, query: trimmedQuery, analysisOverride: Boolean(analysisOverride) });
+    setSearchStatusMessage(null);
 
     const cached = searchCacheRef.current.get(normalized);
     if (cached && cached.expiry > Date.now()) {
+      console.log('[DEBUG] executeSearch cache hit', { origin, query: trimmedQuery, total: cached.state.pagination.total });
+      setSearchStatusMessage(cached.state.supplements.length === 0 ? '无结果/重试' : null);
       dispatch({ type: 'SEARCH_SUCCESS', payload: cached.state });
       if (origin === 'auto') {
         addHistoryEntry(cached.state, analysisOverride ?? state.analysis ?? null);
       }
       showToast({ tone: 'info', title: 'Using cached results', description: `Cache hit: ${cached.state.pagination.total} records` });
+      console.log('[DEBUG] executeSearch end', { origin, query: trimmedQuery, source: 'cache' });
       return;
     }
 
-    dispatch({ type: 'SEARCH_START', query });
+    dispatch({ type: 'SEARCH_START', query: trimmedQuery });
 
     const controller = new AbortController();
     searchAbortRef.current?.abort();
@@ -143,9 +245,15 @@ function AnalyzeExperience() {
     const startedAt = Date.now();
     timerRef.current.start('search');
 
+    console.log('[DEBUG] executeSearch request', {
+      origin,
+      params: { query: trimmedQuery, limit: 8 },
+      timestamp: new Date().toISOString(),
+    });
+
     try {
       const response = await apiClient.searchSupplements(
-        { query, limit: 8 },
+        { query: trimmedQuery, limit: 8 },
         { signal: controller.signal, retries: 1, description: 'supplement search' }
       );
       const endedAt = Date.now();
@@ -153,17 +261,24 @@ function AnalyzeExperience() {
       dispatch({ type: 'SET_TIMING', key: 'search', value: duration });
       const searchState: SearchState = {
         ...response,
-        query,
+        query: trimmedQuery,
         startedAt,
         completedAt: endedAt,
         durationMs: duration,
       };
+      setSearchStatusMessage(searchState.supplements.length === 0 ? '无结果/重试' : null);
       dispatch({ type: 'SEARCH_SUCCESS', payload: searchState });
       searchCacheRef.current.set(normalized, { state: searchState, expiry: Date.now() + SEARCH_CACHE_TTL_MS });
       if (origin === 'auto') {
         addHistoryEntry(searchState, analysisOverride ?? state.analysis ?? null);
       }
       showToast({ tone: 'success', title: origin === 'auto' ? 'Automated search complete' : 'Search complete', description: `Found ${searchState.pagination.total} results` });
+      console.log('[DEBUG] executeSearch success', {
+        origin,
+        query: trimmedQuery,
+        total: searchState.pagination.total,
+        durationMs: duration,
+      });
     } catch (error) {
       if (error instanceof APIError && (error.code === 'ABORTED' || error.code === 'TIMEOUT')) {
         const fallbackStatus = state.search
@@ -179,15 +294,19 @@ function AnalyzeExperience() {
           title: error.code === 'ABORTED' ? 'Search cancelled' : 'Search timeout',
           description: error.friendlyMessage,
         });
+        console.log('[DEBUG] executeSearch cancelled', { origin, query: trimmedQuery, code: error.code });
         return;
       }
+      setSearchStatusMessage('无结果/重试');
+      console.error('[DEBUG] executeSearch error', error);
       const message = error instanceof APIError ? error.friendlyMessage : 'Search failed, please try again later.';
       dispatch({ type: 'SEARCH_FAILURE', message, detail: error instanceof Error ? error.message : undefined });
       showToast({ tone: 'error', title: 'Search failed', description: message });
     } finally {
       searchAbortRef.current = null;
+      console.log('[DEBUG] executeSearch end', { origin, query: trimmedQuery, source: 'network' });
     }
-  }, [addHistoryEntry, dispatch, showToast, state.analysis, state.ocr, state.search]);
+  }, [addHistoryEntry, dispatch, setSearchStatusMessage, showToast, state.analysis, state.ocr, state.search]);
 
   const runAnalysis = useCallback(async (ocr: OcrState) => {
     const useMock = state.debug.useMockAnalyze;
@@ -201,16 +320,38 @@ function AnalyzeExperience() {
     timerRef.current.start('analyze');
 
     try {
-      let analysis: AnalysisState;
+      let analysis: AnalysisState | null = null;
+      let autoQuery = '';
+      let apiResult: Awaited<ReturnType<typeof apiClient.analyzeSupplementDetailed>> | null = null;
+
       if (useMock) {
         analysis = runMockAnalyze(ocr);
+        const duration = timerRef.current.end('analyze') || 0;
+        analysis.durationMs = duration;
+        analysis.completedAt = Date.now();
+        analysis.startedAt = analysis.completedAt - duration;
+        dispatch({ type: 'SET_TIMING', key: 'analyze', value: duration });
+        dispatch({ type: 'ANALYZE_SUCCESS', payload: analysis });
+        showToast({ tone: 'success', title: 'Analysis complete', description: 'Mock analysis generated results.' });
+        autoQuery = buildSearchQuery(analysis, ocr);
       } else {
-        const input: AnalyzeInput = ocr.text
-          ? { text: ocr.text }
-          : state.upload?.response?.imageUrl
-          ? { imageUrl: state.upload.response.imageUrl }
-          : { text: '' };
-        const response = await apiClient.analyzeSupplement(input, {
+        const baseInput =
+          ocr.text && ocr.text.trim().length > 0
+            ? { text: ocr.text, imageUrl: state.upload?.response?.imageUrl }
+            : state.upload?.response?.imageUrl
+            ? { imageUrl: state.upload.response.imageUrl }
+            : { text: '' };
+
+        const sanitizedOcrResult = ocr
+          ? (JSON.parse(JSON.stringify(ocr)) as Partial<OCRResult>)
+          : undefined;
+        const input: AnalyzeInput = {
+          ...baseInput,
+          ...(ocr.scanId ? { scanId: ocr.scanId } : {}),
+          userId: 'anonymous',
+          ...(sanitizedOcrResult ? { ocrResult: sanitizedOcrResult } : {}),
+        };
+        apiResult = await apiClient.analyzeSupplementDetailed(input, {
           signal: controller.signal,
           retries: 2,
           description: 'supplement analysis',
@@ -218,26 +359,49 @@ function AnalyzeExperience() {
         const endedAt = Date.now();
         const duration = timerRef.current.end('analyze') || endedAt - startedAt;
         dispatch({ type: 'SET_TIMING', key: 'analyze', value: duration });
-        analysis = {
-          ...response,
-          startedAt,
-          completedAt: endedAt,
-          durationMs: duration,
-          source: 'live',
-        };
+
+        autoQuery = typeof apiResult?.searchMeta?.query === 'string' ? apiResult.searchMeta.query.trim() : '';
+
+        if (apiResult.ok && apiResult.analysis) {
+          analysis = {
+            ...apiResult.analysis,
+            startedAt,
+            completedAt: endedAt,
+            durationMs: duration,
+            source: 'live',
+          };
+          dispatch({ type: 'ANALYZE_SUCCESS', payload: analysis });
+          showToast({ tone: 'success', title: 'Analysis complete', description: 'AI produced the nutrition insights.' });
+        } else {
+          const message = apiResult?.message ?? 'No supplement match found';
+          dispatch({ type: 'ANALYZE_FAILURE', message, detail: undefined });
+          showToast({
+            tone: 'info',
+            title: '未匹配到补充剂',
+            description: message,
+          });
+        }
       }
 
-      if (useMock) {
-        const duration = timerRef.current.end('analyze') || 0;
-        dispatch({ type: 'SET_TIMING', key: 'analyze', value: duration });
-        analysis.durationMs = duration;
-        analysis.completedAt = Date.now();
-        analysis.startedAt = analysis.completedAt - duration;
-      }
+      const fallbackMatch =
+        apiResult?.matches && apiResult.matches.length > 0
+          ? `${apiResult.matches[0].brand ?? ''} ${apiResult.matches[0].name ?? ''}`.trim()
+          : '';
+      const finalQuery =
+        autoQuery ||
+        buildSearchQuery(analysis, ocr, apiResult?.searchMeta?.normalized ?? fallbackMatch);
 
-      dispatch({ type: 'ANALYZE_SUCCESS', payload: analysis });
-      showToast({ tone: 'success', title: 'Analysis complete', description: 'AI produced the nutrition insights.' });
-      await executeSearch(buildSearchQuery(analysis, ocr), 'auto', analysis);
+      if (finalQuery) {
+        console.log('[DEBUG] runAnalysis auto search payload', {
+          query: finalQuery,
+          source: autoQuery ? 'api' : 'fallback',
+          analysis: Boolean(analysis),
+        });
+        await executeSearch(finalQuery, 'auto', analysis);
+        console.log('[DEBUG] runAnalysis auto search complete', { query: finalQuery });
+      } else {
+        console.warn('[DEBUG] runAnalysis skipped auto-search: no query derived');
+      }
     } catch (error) {
       if (error instanceof APIError && error.code === 'ABORTED') {
         showToast({ tone: 'info', title: 'Analysis cancelled' });
@@ -267,6 +431,30 @@ function AnalyzeExperience() {
         signal: controller.signal,
         onProgress: (value) => setOcrProgress(Math.max(value, 20)),
       })) as OCRResult;
+
+      let persistedScanId: string | undefined;
+      const normalizedText = result.text?.trim() ?? '';
+      if (normalizedText.length > 0) {
+        try {
+          const sanitizedForStorage = JSON.parse(
+            JSON.stringify({ ...result, scanId: undefined })
+          ) as Partial<OCRResult>;
+          const persisted = await apiClient.createScan(
+            {
+              imageUrl: state.upload?.response?.imageUrl,
+              ocrText: normalizedText,
+              ocrConfidence: result.confidence,
+              ocrResult: sanitizedForStorage,
+              userId: 'anonymous',
+            },
+            { retries: 1, description: 'persist scan' }
+          );
+          persistedScanId = persisted.scan.id;
+        } catch (persistError) {
+          console.warn('Failed to persist OCR scan', persistError);
+        }
+      }
+
       const barcode = extractBarcode(result.text);
       const duration = timerRef.current.end('ocr') || Date.now() - startedAt;
       dispatch({ type: 'SET_TIMING', key: 'ocr', value: duration });
@@ -274,6 +462,7 @@ function AnalyzeExperience() {
         ...result,
         barcode,
         processingTime: duration,
+        scanId: persistedScanId ?? result.scanId,
       };
       setOcrProgress(100);
       dispatch({ type: 'OCR_SUCCESS', payload });
@@ -292,7 +481,7 @@ function AnalyzeExperience() {
     } finally {
       ocrAbortRef.current = null;
     }
-  }, [dispatch, extractBarcode, runAnalysis, setOcrProgress, showToast]);
+  }, [dispatch, extractBarcode, runAnalysis, setOcrProgress, showToast, state.upload?.response?.imageUrl]);
 
   const handleUpload = useCallback(async (file: File) => {
     dispatch({ type: 'RESET_ERROR' });
@@ -387,11 +576,15 @@ function AnalyzeExperience() {
   }, [runAnalysis, state.ocr]);
 
   const handleRetrySearch = useCallback(() => {
-    if (state.analysis) {
-      const query = buildSearchQuery(state.analysis, state.ocr ?? null);
+    const query =
+      state.search?.query ||
+      buildSearchQuery(state.analysis, state.ocr ?? null);
+    if (query && query.trim()) {
       void executeSearch(query, 'auto', state.analysis);
+    } else {
+      showToast({ tone: 'info', title: '无法重新搜索', description: '缺少可用的搜索关键字。' });
     }
-  }, [executeSearch, state.analysis, state.ocr]);
+  }, [executeSearch, showToast, state.analysis, state.ocr, state.search?.query]);
 
   const handleSelectHistory = useCallback((entry: HistoryEntry) => {
     dispatch({ type: 'RESTORE_HISTORY', payload: entry });
@@ -448,6 +641,12 @@ function AnalyzeExperience() {
     const combined = Array.from(new Set([...fromAnalysis, ...fromSearch])).filter((value): value is string => Boolean(value));
     return combined.length ? combined : undefined;
   }, [state.analysis, state.search]);
+
+  const searchError = state.error?.step === 'searching';
+  const showSearchStatusNotice = Boolean(searchStatusMessage);
+  const searchStatusTitle = searchError ? '搜索出现问题' : '未找到匹配结果';
+  const searchStatusDescription = searchStatusMessage ?? (searchError ? '搜索失败，请重试' : '无结果/重试');
+  const searchPanelStatus = searchError ? 'error' : stepperSteps[3].status;
 
   return (
     <div className="min-h-screen bg-bg-main pb-16">
@@ -516,15 +715,37 @@ function AnalyzeExperience() {
               suggestions={suggestions}
               placeholder="e.g., Pure Encapsulations, Vitamin D3, UPC"
               debounceDelay={300}
-              loading={state.status === 'searching' && state.progress.search < 100}
+              loading={state.status === 'searching'}
               className="w-full"
             />
           </section>
 
+          {showSearchStatusNotice ? (
+            <section className="rounded-3xl border border-dashed border-border-muted bg-white p-6 shadow-sm" aria-live="polite">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-base font-semibold text-text-dark">{searchStatusTitle}</h4>
+                  <p className="mt-1 text-sm text-text-secondary">{searchStatusDescription}</p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-full border border-border-light px-4 py-2 text-sm font-medium text-text-dark transition hover:border-brand-medical focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-medical"
+                  onClick={handleRetrySearch}
+                >
+                  重试搜索
+                </button>
+              </div>
+            </section>
+          ) : null}
+
           <SearchPanel
-            status={stepperSteps[3].status}
-            results={state.search}
-            error={state.error?.step === 'searching' ? state.error.message : null}
+            status={searchPanelStatus}
+            results={
+              showSearchStatusNotice && (!state.search || state.search.supplements.length === 0)
+                ? null
+                : state.search
+            }
+            error={searchError ? searchStatusDescription : null}
             onRetry={handleRetrySearch}
             showRawJson={state.debug.showRawJson}
           />
@@ -547,10 +768,31 @@ function AnalyzeExperience() {
   );
 }
 
-function buildSearchQuery(analysis: AnalysisState, ocr: OcrState | null): string {
-  const parts = [analysis.brand, analysis.supplementName];
-  if (ocr?.barcode) parts.push(ocr.barcode);
-  const ingredient = analysis.ingredients?.[0]?.name;
-  if (ingredient) parts.push(ingredient);
-  return parts.filter(Boolean).join(' ');
+function buildSearchQuery(analysis: AnalysisState | null, ocr: OcrState | null, fallback?: string): string {
+  const parts = new Set<string>();
+  if (analysis?.brand) parts.add(analysis.brand);
+  if (analysis?.supplementName) parts.add(analysis.supplementName);
+  if (ocr?.barcode) parts.add(ocr.barcode);
+  const ingredient = analysis?.ingredients?.[0]?.name;
+  if (ingredient) parts.add(ingredient);
+  if (fallback) parts.add(fallback);
+
+  const query = Array.from(parts)
+    .map(part => part.trim())
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  if (query) {
+    return query;
+  }
+
+  if (ocr?.text) {
+    const tokens = ocr.text.split(/\s+/).filter(Boolean).slice(0, 6);
+    if (tokens.length) {
+      return tokens.join(' ');
+    }
+  }
+
+  return '';
 }

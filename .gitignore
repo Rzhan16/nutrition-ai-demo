@@ -26,6 +26,10 @@
 public/tesseract/
 public/uploads/
 prisma/*.db
+batch_ocr_out/
+webapp/batch_ocr_out/
+!webapp/batch_ocr_out/curated-latest.json
+docker/ocr/cache/
 
 # debug
 npm-debug.log*

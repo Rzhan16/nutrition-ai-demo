@@ -1,0 +1,29 @@
+{
+  "item": {
+    "brand": "Micro Labs",
+    "product": "Vitamin D3 Softgels"
+  },
+  "imgPath": "sample-shortword-image",
+  "ocr": {
+    "words": [
+      {
+        "text": "d3",
+        "confidence": 0.9,
+        "line_id": 1,
+        "bbox": [0, 0, 20, 20]
+      },
+      {
+        "text": "5000",
+        "confidence": 0.55,
+        "line_id": 1,
+        "bbox": [25, 0, 70, 20]
+      },
+      {
+        "text": "mg",
+        "confidence": 0.99,
+        "line_id": 1,
+        "bbox": [75, 0, 100, 20]
+      }
+    ]
+  }
+}

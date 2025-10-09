@@ -1049,7 +1049,20 @@ export function SmartScanProvider({ children }: { children: ReactNode }): ReactE
       pendingSearchController?.abort();
       searchAbortRef.current = null;
 
-      const input: AnalyzeInput = barcode?.code ? { barcode: barcode.code } : { text: effectiveText };
+      const sanitizedOcr = ocr ? (JSON.parse(JSON.stringify(ocr)) as Partial<OCRResult>) : undefined;
+      const input: AnalyzeInput = barcode?.code
+        ? {
+            barcode: barcode.code,
+            userId: 'anonymous',
+            ...(ocr?.scanId ? { scanId: ocr.scanId } : {}),
+            ...(sanitizedOcr ? { ocrResult: sanitizedOcr } : {}),
+          }
+        : {
+            text: effectiveText,
+            userId: 'anonymous',
+            ...(ocr?.scanId ? { scanId: ocr.scanId } : {}),
+            ...(sanitizedOcr ? { ocrResult: sanitizedOcr } : {}),
+          };
       let analysis: AnalysisResponse | null = null;
       const analyzeStartedAt = Date.now();
       const analyzeStartPerf = typeof performance !== 'undefined' ? performance.now() : analyzeStartedAt;

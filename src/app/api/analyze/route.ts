@@ -1,402 +1,585 @@
+import { randomUUID } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
-import { withErrorHandling, createSuccessResponse } from '@/lib/error-handler'
+import fs from 'fs'
+import path from 'path'
+import type { Prisma } from '@prisma/client'
+import { createSuccessResponse, withErrorHandling } from '@/lib/error-handler'
 import { withRateLimit, RateLimitConfigs, getRateLimitHeaders } from '@/lib/rate-limiter'
-import { ocrAnalysisSchema, textAnalysisSchema, aiAnalysisSchema } from '@/lib/validations'
 import { prisma } from '@/lib/db'
-import { mockAnalysis } from '@/lib/mock-data'
-import { z } from 'zod'
-import type { OCRResult } from '@/lib/types'
 
-/**
- * POST /api/analyze
- * Accept image URL, text input, or barcode for supplement analysis
- * Integrates with OCR service, barcode lookup, and AI analysis
- */
-
-// Real OCR function (server-side fallback)
-async function performServerOCR(imageUrl: string): Promise<{ text: string; confidence: number; barcode?: string }> {
-  try {
-    // In a real implementation, you would:
-    // 1. Download the image from the URL
-    // 2. Use a server-side OCR service (e.g., Google Vision API, AWS Textract)
-    // 3. Attempt barcode detection first, then fall back to OCR
-    
-    console.log('Performing server-side OCR for:', imageUrl);
-    
-    // For now, return mock data with realistic structure
-    // In production, replace with actual OCR service
-    const mockOCRResult: OCRResult = {
-      ok: true,
-      text: "Pure Encapsulations Vitamin D3 1000 IU\nSupplement Facts\nServing Size: 1 capsule\nVitamin D3 (as cholecalciferol) 25 mcg (1000 IU) 125% DV\nOther ingredients: Cellulose, vegetarian capsule",
-      confidence: 0.92,
-      durationMs: 0,
-      barcode: undefined,
-    };
-    
-    return mockOCRResult;
-  } catch (error) {
-    console.error('Server OCR failed:', error);
-    throw new Error('OCR processing failed');
-  }
+type BrandEquivalentEntry = {
+  canonical: string
+  aliases: string[]
 }
 
-// Barcode lookup function
-async function lookupByBarcode(barcode: string): Promise<any | null> {
+type RawIngredient = {
+  name?: string
+  amount?: string
+  unit?: string
+  dailyValue?: string | number
+}
+
+const STRIP_UNITS_REGEX = /\b\d+(mg|mcg|iu|g|grams?|ml|milligrams?|micrograms?|capsules?)\b/gi
+const STRIP_GENERIC_PHRASES_REGEX = /dietary\s+supplement/gi
+const WHITESPACE_REGEX = /\s+/g
+const BRAND_SANITIZE_REGEX = /[^a-z0-9 ]/g
+const DOUBLE_SPACE_REGEX = /\s{2,}/g
+const MAX_SEARCH_RESULTS = 8
+
+const BRAND_EQUIVALENTS_PATH = path.join(
+  process.cwd(),
+  'webapp',
+  'scripts',
+  'data',
+  'equivalents.json',
+)
+
+const BUILT_IN_BRAND_EQUIVALENTS: BrandEquivalentEntry[] = [
+  {
+    canonical: 'Sports Research',
+    aliases: ['sports', 'sports research', 'sportsresearch', 'sports-research'],
+  },
+  {
+    canonical: 'Pure Encapsulations',
+    aliases: ['pure', 'encapsulations', 'pure encapsulation'],
+  },
+  {
+    canonical: 'Thorne',
+    aliases: ['thorne research', 'thorne®'],
+  },
+  {
+    canonical: 'NOW Foods',
+    aliases: ['now', 'nowfood', 'now foods'],
+  },
+]
+
+interface QueryNormalization {
+  raw: string
+  cleaned: string
+  tokens: string[]
+  short: string
+  clauses: NonNullable<Prisma.SupplementWhereInput['OR']>
+}
+
+interface SearchOutcome {
+  normalization: QueryNormalization
+  supplements: Awaited<ReturnType<typeof prisma.supplement.findMany>>
+}
+
+let cachedBrandAliasMap: Map<string, string> | null = null
+
+const sanitizeForMatching = (value: string): string =>
+  value.toLowerCase().replace(BRAND_SANITIZE_REGEX, ' ').replace(DOUBLE_SPACE_REGEX, ' ').trim()
+
+const loadBrandAliasMap = (): Map<string, string> => {
+  if (cachedBrandAliasMap) {
+    return cachedBrandAliasMap
+  }
+
+  const entries: BrandEquivalentEntry[] = [...BUILT_IN_BRAND_EQUIVALENTS]
+
   try {
-    console.log('Looking up barcode:', barcode);
-    
-    // Try local database first
-    if (prisma) {
-      const supplement = await prisma.supplement.findFirst({
-        where: {
-          OR: [
-            { name: { contains: barcode } },
-            // In a real implementation, you'd have a barcode field
-            // { barcode: barcode }
-          ]
-        }
-      });
-      
-      if (supplement) {
-        return {
-          supplementName: supplement.name,
-          brand: supplement.brand,
-          category: supplement.category,
-          ingredients: supplement.ingredients,
-          source: 'local_database'
-        };
+    if (fs.existsSync(BRAND_EQUIVALENTS_PATH)) {
+      const raw = fs.readFileSync(BRAND_EQUIVALENTS_PATH, 'utf-8')
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        parsed.forEach(entry => {
+          if (
+            entry &&
+            typeof entry.canonical === 'string' &&
+            Array.isArray(entry.aliases)
+          ) {
+            entries.push({
+              canonical: entry.canonical,
+              aliases: entry.aliases.filter((alias: unknown): alias is string => typeof alias === 'string'),
+            })
+          }
+        })
       }
     }
-    
-    // Try external APIs (Open Food Facts, etc.)
+  } catch (error) {
+    console.warn('[ANALYZE] Failed to load equivalents.json:', error)
+  }
+
+  const map = new Map<string, string>()
+
+  const register = (canonical: string, alias: string) => {
+    const normalizedAlias = sanitizeForMatching(alias)
+    if (normalizedAlias) {
+      map.set(normalizedAlias, canonical)
+    }
+  }
+
+  entries.forEach(entry => {
+    if (!entry.canonical) {
+      return
+    }
+    register(entry.canonical, entry.canonical)
+    entry.aliases.forEach(alias => register(entry.canonical, alias))
+  })
+
+  cachedBrandAliasMap = map
+  return map
+}
+
+const normalizeBrandName = (brand?: string): string | undefined => {
+  if (!brand || typeof brand !== 'string') {
+    return undefined
+  }
+
+  const trimmed = brand.trim()
+  if (!trimmed) {
+    return undefined
+  }
+
+  const aliasMap = loadBrandAliasMap()
+  const sanitized = sanitizeForMatching(trimmed)
+  if (!sanitized) {
+    return undefined
+  }
+
+  const direct = aliasMap.get(sanitized)
+  if (direct) {
+    return direct
+  }
+
+  for (const [alias, canonical] of aliasMap.entries()) {
+    if (sanitized.includes(alias)) {
+      return canonical
+    }
+  }
+
+  if (sanitized.includes('sports')) return 'Sports Research'
+  if (sanitized.includes('pure')) return 'Pure Encapsulations'
+  if (sanitized.includes('thorne')) return 'Thorne'
+  if (sanitized.includes('now')) return 'NOW Foods'
+
+  return trimmed
+}
+
+const detectBrandFromText = (text: string): string | undefined => {
+  if (!text) return undefined
+  const aliasMap = loadBrandAliasMap()
+  const sanitizedText = sanitizeForMatching(text)
+  if (!sanitizedText) return undefined
+
+  for (const [alias, canonical] of aliasMap.entries()) {
+    const pattern = alias.includes(' ')
+      ? alias
+      : ` ${alias} `
+    if (
+      sanitizedText === alias ||
+      sanitizedText.startsWith(`${alias} `) ||
+      sanitizedText.endsWith(` ${alias}`) ||
+      sanitizedText.includes(pattern)
+    ) {
+      return canonical
+    }
+  }
+
+  if (sanitizedText.includes('sports')) return 'Sports Research'
+  if (sanitizedText.includes('pure')) return 'Pure Encapsulations'
+  if (sanitizedText.includes('thorne')) return 'Thorne'
+  if (sanitizedText.includes('now')) return 'NOW Foods'
+
+  return undefined
+}
+
+const cleanText = (value: string): string => {
+  if (!value) return ''
+  const lines = value.replace(/\r\n/g, '\n').split('\n')
+  return lines
+    .map(line =>
+      line
+        .replace(STRIP_UNITS_REGEX, ' ')
+        .replace(STRIP_GENERIC_PHRASES_REGEX, ' ')
+        .replace(WHITESPACE_REGEX, ' ')
+        .trim(),
+    )
+    .filter(Boolean)
+    .join('\n')
+}
+
+const normalizeQuery = (rawQuery: string): QueryNormalization => {
+  const raw = rawQuery.trim()
+  const cleaned = raw
+    .replace(STRIP_UNITS_REGEX, '')
+    .replace(STRIP_GENERIC_PHRASES_REGEX, '')
+    .replace(WHITESPACE_REGEX, ' ')
+    .trim()
+
+  const tokens = cleaned.split(/\s+/).filter(Boolean)
+  const short = tokens.slice(0, 2).join(' ') || cleaned
+  const clauses: QueryNormalization['clauses'] = []
+
+  const pushClause = (
+    field: 'name' | 'brand',
+    comparator: 'contains' | 'startsWith',
+    value: string,
+  ) => {
+    if (!value) return
+    const clause: Prisma.SupplementWhereInput = {
+      [field]: { [comparator]: value },
+    }
+    clauses.push(clause)
+  }
+
+  if (short) {
+    pushClause('brand', 'contains', short)
+    pushClause('name', 'contains', short)
+    pushClause('name', 'startsWith', short)
+  }
+
+  for (const token of tokens) {
+    pushClause('name', 'contains', token)
+    pushClause('brand', 'contains', token)
+  }
+
+  if (cleaned && cleaned !== short) {
+    pushClause('name', 'contains', cleaned)
+    pushClause('brand', 'contains', cleaned)
+  }
+
+  return { raw, cleaned, tokens, short, clauses }
+}
+
+const buildWhereForAnalyze = (
+  normalization: QueryNormalization,
+  brand?: string,
+): Prisma.SupplementWhereInput | undefined => {
+  const where: Prisma.SupplementWhereInput = {}
+
+  if (normalization.clauses.length > 0) {
+    where.OR = normalization.clauses
+  }
+
+  if (brand) {
+    where.brand = { contains: brand }
+  }
+
+  return Object.keys(where).length > 0 ? where : undefined
+}
+
+const runDatabaseSearch = async (query: string, brand?: string): Promise<SearchOutcome> => {
+  const normalization = normalizeQuery(query)
+  const where = buildWhereForAnalyze(normalization, brand)
+
+  if (!where) {
+    return { normalization, supplements: [] }
+  }
+
+  const find = (input: Prisma.SupplementWhereInput) =>
+    prisma.supplement.findMany({
+      where: input,
+      orderBy: [
+        { verified: 'desc' },
+        { createdAt: 'desc' },
+      ],
+      take: MAX_SEARCH_RESULTS,
+    })
+
+  let supplements = await find(where)
+
+  if (supplements.length === 0 && brand) {
+    const fallbackWhere = buildWhereForAnalyze(normalization, undefined)
+    if (fallbackWhere) {
+      supplements = await find(fallbackWhere)
+    }
+  }
+
+  return { normalization, supplements }
+}
+
+const parseIngredients = (value: unknown): Array<{
+  name: string
+  amount: string
+  unit: string
+  dailyValue?: number
+}> => {
+  let raw: unknown = value
+  if (typeof value === 'string') {
     try {
-      const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
-      const data = await response.json();
-      
-      if (data.status === 1 && data.product) {
-        const product = data.product;
-        return {
-          supplementName: product.product_name,
-          brand: product.brands,
-          category: product.categories,
-          description: product.generic_name,
-          ingredients: product.ingredients_text?.split(', '),
-          source: 'open_food_facts'
-        };
+      raw = JSON.parse(value)
+    } catch {
+      raw = []
+    }
+  }
+
+  if (!Array.isArray(raw)) {
+    return []
+  }
+
+  return raw
+    .map(item => {
+      if (!item || typeof item !== 'object') {
+        return null
       }
-    } catch (externalError) {
-      console.warn('External barcode lookup failed:', externalError);
-    }
-    
-    return null;
-  } catch (error) {
-    console.error('Barcode lookup failed:', error);
-    return null;
+
+      const ingredient = item as RawIngredient
+      const name = typeof ingredient.name === 'string' ? ingredient.name : ''
+      if (!name) return null
+
+      const amount = typeof ingredient.amount === 'string' ? ingredient.amount : ''
+      const unit = typeof ingredient.unit === 'string' ? ingredient.unit : ''
+      const rawDailyValue = ingredient.dailyValue
+
+      let dailyValue: number | undefined
+      if (typeof rawDailyValue === 'number') {
+        dailyValue = rawDailyValue
+      } else if (typeof rawDailyValue === 'string') {
+        const numeric = Number.parseFloat(rawDailyValue.replace('%', '').trim())
+        if (!Number.isNaN(numeric)) {
+          dailyValue = numeric
+        }
+      }
+
+      return {
+        name,
+        amount,
+        unit,
+        dailyValue,
+      }
+    })
+    .filter((value): value is {
+      name: string
+      amount: string
+      unit: string
+      dailyValue?: number
+    } => Boolean(value))
+}
+
+const attachRateLimitHeaders = (
+  response: NextResponse,
+  rateLimitResult: { remaining: number; resetTime: number },
+) => {
+  Object.entries(getRateLimitHeaders(rateLimitResult)).forEach(([key, value]) => {
+    response.headers.set(key, value)
+  })
+}
+
+const buildSearchQuery = (text: string, brand?: string) => {
+  const lines = text.split('\n').map(line => line.trim()).filter(Boolean)
+  const tokens = text.split(/\s+/).filter(Boolean)
+  const primaryTokens = tokens.slice(0, 8)
+  const queryParts = new Set<string>()
+
+  if (brand) queryParts.add(brand)
+  if (lines[0]) queryParts.add(lines[0])
+  if (lines[1]) queryParts.add(lines[1])
+  if (primaryTokens.length > 0) {
+    queryParts.add(primaryTokens.join(' '))
+  }
+
+  const query =
+    Array.from(queryParts)
+      .join(' ')
+      .trim() ||
+    brand ||
+    primaryTokens.slice(0, 3).join(' ')
+
+  return {
+    query: query.trim(),
+    lines,
+    tokens: primaryTokens,
   }
 }
 
-// Enhanced AI analysis with better prompts
-async function performAdvancedAIAnalysis(input: {
-  text?: string;
-  barcode?: string;
-  productInfo?: any;
-}): Promise<any> {
-  try {
-    // If we have barcode info, use it for context
-    let analysisContext = '';
-    if (input.productInfo) {
-      analysisContext = `Product Information:
-Name: ${input.productInfo.supplementName || 'Unknown'}
-Brand: ${input.productInfo.brand || 'Unknown'}
-Category: ${input.productInfo.category || 'Supplement'}
-Ingredients: ${input.productInfo.ingredients?.join(', ') || 'Not specified'}
-Source: ${input.productInfo.source || 'Unknown'}
-
-`;
-    }
-    
-    if (input.text) {
-      analysisContext += `OCR Extracted Text:
-${input.text}
-
-`;
-    }
-    
-    // In a real implementation, you would use OpenAI API here
-    // const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    // const completion = await openai.chat.completions.create({
-    //   model: "gpt-4",
-    //   messages: [
-    //     {
-    //       role: "system", 
-    //       content: NUTRITION_ANALYSIS_PROMPT
-    //     },
-    //     {
-    //       role: "user",
-    //       content: analysisContext
-    //     }
-    //   ],
-    //   temperature: 0.3,
-    // });
-    
-    // For now, return enhanced mock analysis
-    const enhancedAnalysis = {
-      ...mockAnalysis,
-      supplementName: input.productInfo?.supplementName || extractSupplementName(input.text || ''),
-      brand: input.productInfo?.brand || extractBrand(input.text || ''),
-      scanId: `scan-${Date.now()}`,
-      analysisMethod: input.productInfo ? 'barcode_lookup' : 'ocr_analysis',
-      confidence: input.productInfo ? 0.95 : 0.88,
-      sources: input.productInfo?.source ? [input.productInfo.source] : ['ocr_extraction'],
-      contextPreview: analysisContext.trim(),
-    };
-    
-    return enhancedAnalysis;
-  } catch (error) {
-    console.error('AI analysis failed:', error);
-    // Return fallback analysis
-    return {
-      ...mockAnalysis,
-      scanId: `fallback-${Date.now()}`,
-      confidence: 0.5,
-      analysisMethod: 'fallback'
-    };
+const extractTextPayload = (body: Record<string, unknown>): string => {
+  if (typeof body.text === 'string') {
+    return body.text
   }
+  if (typeof body.ocrText === 'string') {
+    return body.ocrText
+  }
+  const ocrResult = body.ocrResult as Record<string, unknown> | undefined
+  if (ocrResult && typeof ocrResult.text === 'string') {
+    return ocrResult.text
+  }
+  return ''
 }
 
-// Helper functions
-function extractSupplementName(text: string): string {
-  const lines = text.split('\n');
-  for (const line of lines) {
-    if (line.length > 5 && line.length < 50 && 
-        /vitamin|mineral|supplement|complex|formula|extract/i.test(line)) {
-      return line.trim();
-    }
+const pickBrandCandidate = (body: Record<string, unknown>): string | undefined => {
+  if (typeof body.brand === 'string' && body.brand.trim()) {
+    return body.brand
   }
-  return 'Unknown Supplement';
-}
-
-function extractBrand(text: string): string {
-  const knownBrands = [
-    'Pure Encapsulations', 'Thorne', 'Life Extension', 'NOW Foods',
-    'Nature Made', 'Centrum', 'Garden of Life', 'Nordic Naturals'
-  ];
-  
-  const upperText = text.toUpperCase();
-  for (const brand of knownBrands) {
-    if (upperText.includes(brand.toUpperCase())) {
-      return brand;
-    }
+  const ocrResult = body.ocrResult as Record<string, unknown> | undefined
+  if (ocrResult && typeof ocrResult.brand === 'string' && ocrResult.brand.trim()) {
+    return ocrResult.brand
   }
-  
-  // Try to extract from first line
-  const firstLine = text.split('\n')[0]?.trim();
-  if (firstLine && firstLine.length < 30 && /^[A-Za-z\s&'.]+$/.test(firstLine)) {
-    return firstLine;
-  }
-  
-  return 'Unknown Brand';
+  return undefined
 }
 
 export const POST = withErrorHandling(async (request: NextRequest): Promise<NextResponse> => {
-  // Apply rate limiting (more restrictive for analysis)
   const rateLimitResult = withRateLimit(RateLimitConfigs.AI_ANALYSIS)(request)
-  
-  if (!rateLimitResult.allowed) {
-    return NextResponse.json({
-      success: false,
-      error: 'RATE_LIMIT_EXCEEDED',
-      message: 'Rate limit exceeded. Maximum 5 requests per 60 seconds',
-      details: rateLimitResult
-    }, {
-      status: 429,
-      headers: getRateLimitHeaders(rateLimitResult)
-    });
-  }
 
   try {
-    const body = await request.json()
-    
-    // Validate input - support multiple input types
-    let validatedInput: any;
-    
-    if (body.imageUrl) {
-      // Image URL analysis
-      validatedInput = ocrAnalysisSchema.parse(body);
-    } else if (body.text) {
-      // Direct text analysis
-      validatedInput = textAnalysisSchema.parse(body);
-    } else if (body.barcode) {
-      // Barcode analysis
-      validatedInput = z.object({
-        barcode: z.string().min(8).max(20),
-        userId: z.string().optional()
-      }).parse(body);
-    } else {
-      throw new Error('Must provide imageUrl, text, or barcode for analysis');
+    const body = (await request.json()) as Record<string, unknown>
+    const rawText = extractTextPayload(body)
+    const cleanedText = cleanText(rawText)
+
+    const providedBrand = pickBrandCandidate(body)
+    let normalizedBrand = normalizeBrandName(providedBrand)
+    if (!normalizedBrand) {
+      const detected = detectBrandFromText(cleanedText)
+      normalizedBrand = normalizeBrandName(detected)
     }
 
-    const userId = validatedInput.userId || 'anonymous';
-    let ocrText = '';
-    let productInfo = null;
+    const searchPlan = buildSearchQuery(cleanedText, normalizedBrand)
 
-    // Process based on input type
-    if (validatedInput.barcode) {
-      // Barcode lookup
-      console.log('Processing barcode:', validatedInput.barcode);
-      productInfo = await lookupByBarcode(validatedInput.barcode);
-      
-      if (productInfo) {
-        ocrText = `${productInfo.supplementName}\n${productInfo.brand}\n${productInfo.ingredients?.join('\n') || ''}`;
-      } else {
-        throw new Error('Barcode not found in database');
-      }
-      
-    } else if (validatedInput.imageUrl) {
-      // OCR from image
-      console.log('Processing image URL for OCR:', validatedInput.imageUrl);
-      const ocrResult = await performServerOCR(validatedInput.imageUrl);
-      ocrText = ocrResult.text;
-      
-      // If barcode was detected during OCR, look it up
-      if (ocrResult.barcode) {
-        productInfo = await lookupByBarcode(ocrResult.barcode);
-      }
-      
-    } else if (validatedInput.text) {
-      // Direct text input
-      ocrText = validatedInput.text;
-    }
-
-    // Check cache first
-    let existingScan = null;
-    if (prisma && ocrText) {
-      try {
-        existingScan = await prisma.scan.findFirst({
-          where: {
-            ocrText: ocrText,
-            analysis: { not: null } as any
-          },
-          orderBy: { createdAt: 'desc' }
-        });
-      } catch (error) {
-        console.log('Database not available, skipping cache check', error);
-      }
-    }
-
-    if (existingScan && existingScan.analysis) {
+    if (!searchPlan.query) {
       const response = createSuccessResponse({
-        ...(existingScan.analysis as any),
-        cached: true,
-        scanId: existingScan.id
-      }, 'Analysis retrieved from cache');
-      
-      return NextResponse.json(response, {
-        status: 200,
-        headers: getRateLimitHeaders(rateLimitResult)
-      });
+        ok: false,
+        message: 'No supplement match found',
+        confidence: 0,
+        analysis: null,
+        matches: [],
+        searchMeta: {
+          query: '',
+          normalized: '',
+          tokens: [],
+          brand: normalizedBrand ?? null,
+          resultCount: 0,
+        },
+      })
+      attachRateLimitHeaders(response, rateLimitResult)
+      return response
     }
 
-    // Perform AI analysis
-    console.log('Performing AI analysis...');
-    let aiAnalysis;
-    try {
-      aiAnalysis = await performAdvancedAIAnalysis({
-        text: ocrText,
-        barcode: validatedInput.barcode,
-        productInfo
-      });
-      
-      // Validate AI response structure
-      aiAnalysisSchema.parse(aiAnalysis);
-    } catch (error) {
-      // Fallback to mock analysis if AI service fails
-      console.log('AI service not available, using enhanced mock analysis', error);
-      aiAnalysis = {
-        ...mockAnalysis,
-        scanId: `mock-${Date.now()}`,
-        analysisMethod: validatedInput.barcode ? 'barcode_fallback' : 'ocr_fallback'
-      };
+    const { normalization, supplements } = await runDatabaseSearch(
+      searchPlan.query,
+      normalizedBrand,
+    )
+
+    const searchMeta = {
+      query: searchPlan.query,
+      normalized: normalization.cleaned,
+      tokens: normalization.tokens,
+      brand: normalizedBrand ?? null,
+      resultCount: supplements.length,
     }
 
-    // Save scan to database
-    let scan = { id: `mock-scan-${Date.now()}` };
-    let supplementId: string | undefined;
-    
-    if (prisma) {
-      try {
-        scan = await prisma.scan.create({
-          data: {
-            imageUrl: validatedInput.imageUrl || '',
-            ocrText,
-            analysis: aiAnalysis,
-            userId
-          }
-        });
-        
-        // Try to match with existing supplement
-        if (aiAnalysis.supplementName && aiAnalysis.brand) {
-          const supplement = await prisma.supplement.findFirst({
-            where: {
-              name: { contains: aiAnalysis.supplementName },
-              brand: { contains: aiAnalysis.brand }
-            }
-          });
-          
-          if (supplement) {
-            supplementId = supplement.id;
-            // Update scan with supplement reference
-            await prisma.scan.update({
-              where: { id: scan.id },
-              data: { supplementId }
-            });
-          }
-        }
-      } catch (error) {
-        console.log('Database not available, skipping scan save', error);
-      }
+    console.log('[ANALYZE_SEARCH]', {
+      query: searchPlan.query,
+      brand: normalizedBrand,
+      normalized: normalization.cleaned,
+      tokens: normalization.tokens,
+      resultCount: supplements.length,
+    })
+
+    if (supplements.length === 0) {
+      const response = createSuccessResponse({
+        ok: false,
+        message: 'No supplement match found',
+        confidence: 0,
+        analysis: null,
+        matches: [],
+        searchMeta,
+      })
+      attachRateLimitHeaders(response, rateLimitResult)
+      return response
     }
 
-    // Return successful analysis
-    const response = createSuccessResponse({
-      ...aiAnalysis,
-      scanId: scan.id,
-      supplementId,
+    const bestMatch = supplements[0]
+    const parsedIngredients = parseIngredients(bestMatch.ingredients)
+    const ingredientNames = parsedIngredients.map(item => item.name).filter(Boolean)
+    const highlightedIngredients = ingredientNames.slice(0, 4).join(', ')
+    const sanitizedBrand = normalizedBrand ? sanitizeForMatching(normalizedBrand) : ''
+    const matchBrandSanitized = sanitizeForMatching(bestMatch.brand ?? '')
+    const brandMatched =
+      Boolean(sanitizedBrand) && matchBrandSanitized.includes(sanitizedBrand)
+
+    const tokenSet = new Set(normalization.tokens.map(token => sanitizeForMatching(token)))
+    const matchNameTokens = sanitizeForMatching(bestMatch.name ?? '').split(' ').filter(Boolean)
+    const sharedTokens = matchNameTokens.filter(token => token.length > 2 && tokenSet.has(token)).length
+
+    let confidence = 0.62
+    if (brandMatched) confidence += 0.18
+    if (bestMatch.verified) confidence += 0.08
+    if (sharedTokens >= 2) confidence += 0.06
+    if (sharedTokens >= 4) confidence += 0.04
+    confidence = Math.min(0.98, confidence)
+
+    const generatedSummary = {
+      basicIntroduction: `${bestMatch.brand} ${bestMatch.name} is classified as a ${bestMatch.category.toLowerCase()} supplement found in the local database.`,
+      primaryBenefits: highlightedIngredients
+        ? `Key ingredients include ${highlightedIngredients}, supporting the ${bestMatch.category.toLowerCase()} focus.`
+        : `This product supports the ${bestMatch.category.toLowerCase()} category based on its labeled formulation.`,
+      rdaGuidelines:
+        'Follow the serving size on the label and coordinate with a healthcare professional before adjusting dosage.',
+      safetyLimits:
+        'Do not exceed the labeled serving unless your healthcare provider recommends it. Check for interactions with existing medications.',
+      dietarySources: highlightedIngredients
+        ? `Natural sources that also contain ${highlightedIngredients} can complement supplementation.`
+        : 'Review dietary sources that align with the supplement’s active ingredients to optimize intake.',
+      supplementForms:
+        'Common delivery forms include capsules, tablets, or powders. Verify the packaging for exact format.',
+      usageScenarios:
+        'Use when dietary intake is insufficient or when specific support for the labeled category is desired.',
+      risksPrecautions:
+        'Consult a professional if pregnant, nursing, managing chronic conditions, or combining with other supplements.',
+    }
+
+    const analysisPayload = {
+      supplementName: bestMatch.name,
+      brand: bestMatch.brand,
+      confidence,
+      analysis: generatedSummary,
+      ingredients: parsedIngredients,
+      warnings: bestMatch.verified
+        ? []
+        : [
+            'This record is not yet verified in the database. Double-check label details before relying on the information.',
+          ],
+      recommendations: [
+        'Compare the label’s serving size with personal health goals or practitioner guidance.',
+        'Review potential allergens or sensitivities listed on the supplement facts panel.',
+      ],
+      references: [],
+      scanId:
+        typeof body.scanId === 'string' && body.scanId.trim()
+          ? (body.scanId as string)
+          : randomUUID(),
+      supplementId: bestMatch.id,
       cached: false,
-      timestamp: new Date().toISOString()
-    }, 'Analysis completed successfully');
-
-    return NextResponse.json(response, {
-      status: 200,
-      headers: getRateLimitHeaders(rateLimitResult)
-    });
-
-  } catch (error) {
-    console.error('Analysis error:', error);
-    
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({
-        success: false,
-        error: 'VALIDATION_ERROR',
-        message: 'Invalid input data',
-        details: error.issues
-      }, { status: 400 });
+      ocrConfidence:
+        typeof (body.ocrResult as Record<string, unknown> | undefined)?.confidence === 'number'
+          ? ((body.ocrResult as Record<string, unknown>).confidence as number)
+          : undefined,
+      analysisMethod: 'database_search',
+      sources: ['database', cleanedText ? 'label_text' : 'user_input'],
     }
 
-    return NextResponse.json({
-      success: false,
-      error: 'ANALYSIS_ERROR',
-      message: error instanceof Error ? error.message : 'Analysis failed'
-    }, { status: 500 });
+    const response = createSuccessResponse({
+      ok: true,
+      confidence,
+      analysis: analysisPayload,
+      matches: supplements,
+      searchMeta,
+    })
+    attachRateLimitHeaders(response, rateLimitResult)
+    return response
+  } catch (error) {
+    console.error('[ANALYZE_ERROR]', error)
+    const message = error instanceof Error ? error.message : 'Analysis failed'
+    const response = NextResponse.json(
+      {
+        success: false,
+        error: 'ANALYSIS_ERROR',
+        message,
+      },
+      { status: 500 },
+    )
+    attachRateLimitHeaders(response, rateLimitResult)
+    return response
   }
-});
+})
 
 export const GET = withErrorHandling(async (): Promise<NextResponse> => {
   return NextResponse.json({
     success: true,
-    message: 'Analysis API is ready',
-    supportedInputs: ['imageUrl', 'text', 'barcode'],
+    message: 'Analysis API ready',
+    supportedInputs: ['text', 'ocrResult', 'brand'],
     methods: ['POST'],
-    rateLimit: 'Max 5 requests per minute'
-  });
-});
+    rateLimit: 'Max 5 requests per minute',
+  })
+})

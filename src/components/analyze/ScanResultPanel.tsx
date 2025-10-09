@@ -9,6 +9,7 @@ import {
   useState,
   type KeyboardEvent,
 } from 'react';
+import { AlertCircle } from 'lucide-react';
 import type { OcrState } from '@/types/analyze';
 import { cn, formatBarcode } from '@/lib/utils';
 import { SmartScanContext, type DsldNormalized } from '@/components/analyze/SmartScanContext';
@@ -69,6 +70,7 @@ export function ScanResultPanel({
   showRawJson,
   dsld,
 }: ScanResultPanelProps) {
+  const LOW_CONFIDENCE_WARNING_THRESHOLD = 0.65;
   const smartScanContext = useContext(SmartScanContext);
   const dsldState = smartScanContext?.state.dsld;
   const [dsldResultsState, setDsldResultsState] = useState<DsldResultsState>(DEFAULT_DSLD_RESULTS_STATE);
@@ -87,6 +89,19 @@ export function ScanResultPanel({
     const baseConfidence = ocr?.confidence ?? recognitionData?.confidence ?? 0;
     return baseConfidence > 1 ? baseConfidence / 100 : baseConfidence;
   }, [ocr, recognitionData]);
+
+  const isLowConfidence = useMemo(() => {
+    if (!ocr) {
+      return false;
+    }
+    if (ocr.qualityMetrics?.belowThreshold === true) {
+      return true;
+    }
+    if (confidenceValue <= 0) {
+      return false;
+    }
+    return confidenceValue < LOW_CONFIDENCE_WARNING_THRESHOLD;
+  }, [confidenceValue, ocr]);
 
   const textValue = useMemo(() => ocr?.text ?? recognitionData?.text ?? '', [ocr, recognitionData]);
 
@@ -365,6 +380,14 @@ export function ScanResultPanel({
               <span className="font-medium text-text-dark">Recognition confidence: </span>
               {(confidenceValue * 100).toFixed(1)}%
             </p>
+            {isLowConfidence ? (
+              <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-700">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                <p className="text-sm">
+                  Recognition confidence is low; please try retaking the photo or uploading a clearer image of the label to improve accuracy.
+                </p>
+              </div>
+            ) : null}
             {ocr.brand ? (
               <p>
                 <span className="font-medium text-text-dark">Brand: </span>

@@ -1,0 +1,38 @@
+[
+  {
+    "canonical": "omega-3",
+    "aliases": ["fish oil", "epa & dha", "epa dha"]
+  },
+  {
+    "canonical": "vitamin d3",
+    "aliases": ["cholecalciferol", "vit d3"]
+  },
+  {
+    "canonical": "vitamin k2",
+    "aliases": ["mk-7", "mk7"]
+  },
+  {
+    "canonical": "folate",
+    "aliases": ["folic acid", "vitamin b9"]
+  },
+  {
+    "canonical": "vitamin",
+    "aliases": ["vitamln", "vitain"]
+  },
+  {
+    "canonical": "Sports Research",
+    "aliases": ["sports", "sports research", "sportsresearch", "sports-research"]
+  },
+  {
+    "canonical": "Pure Encapsulations",
+    "aliases": ["pure", "encapsulations", "pure encapsulation"]
+  },
+  {
+    "canonical": "Thorne",
+    "aliases": ["thorne research", "thorne®"]
+  },
+  {
+    "canonical": "NOW Foods",
+    "aliases": ["now", "nowfood", "now foods"]
+  }
+]

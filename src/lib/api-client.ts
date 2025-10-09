@@ -1,9 +1,13 @@
+import { z } from 'zod';
 import { mapApiErrorCode, retryWithBackoff } from '@/lib/utils';
 import type {
   AnalysisResponse,
   APIResponse,
+  OCRResult,
+  Scan,
   ScanHistoryResponse,
   SearchResponse,
+  Supplement,
   UploadResponse,
 } from '@/lib/types';
 
@@ -30,6 +34,37 @@ export interface ApiRequestOptions extends RequestInit {
   signal?: AbortSignal;
   description?: string;
 }
+
+const dispatchSearchErrorEvent = (detail: unknown) => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('SEARCH_ERROR', { detail }));
+  }
+};
+
+const searchResponseSchema = z.object({
+  supplements: z.array(z.unknown()),
+  pagination: z.object({
+    total: z.number(),
+    page: z.number(),
+    limit: z.number(),
+    totalPages: z.number(),
+    hasNext: z.boolean(),
+    hasPrev: z.boolean(),
+  }),
+  suggestions: z.object({
+    categories: z.array(z.string()),
+    brands: z.array(z.string()),
+    popularSearches: z.array(z.string()),
+  }),
+  searchMeta: z
+    .object({
+      query: z.string(),
+      normalized: z.string().optional(),
+      tokens: z.array(z.string()).optional(),
+      resultCount: z.number(),
+    })
+    .passthrough(),
+}).passthrough();
 
 function buildUrl(endpoint: string): string {
   if (endpoint.startsWith('http')) {
@@ -165,16 +200,138 @@ export async function uploadImage(file: File, options: ApiRequestOptions = {}): 
 }
 
 export type AnalyzeInput =
-  | { imageUrl: string; userId?: string }
-  | { text: string; userId?: string }
-  | { barcode: string; userId?: string };
+  | {
+      imageUrl: string;
+      userId?: string;
+      scanId?: string;
+      ocrResult?: Partial<OCRResult>;
+    }
+  | {
+      text: string;
+      userId?: string;
+      scanId?: string;
+      imageUrl?: string;
+      ocrResult?: Partial<OCRResult>;
+    }
+  | { barcode: string; userId?: string; scanId?: string; ocrResult?: Partial<OCRResult> };
 
-export async function analyzeSupplement(input: AnalyzeInput, options: ApiRequestOptions = {}): Promise<AnalysisResponse> {
-  return makeRequest<AnalysisResponse>('/api/analyze', {
+export async function analyzeSupplementDetailed(input: AnalyzeInput, options: ApiRequestOptions = {}): Promise<AnalyzeServiceResponse> {
+  return makeRequest<AnalyzeServiceResponse>('/api/analyze', {
     method: 'POST',
     body: JSON.stringify(input),
     ...options,
   });
+}
+
+export async function analyzeSupplement(input: AnalyzeInput, options: ApiRequestOptions = {}): Promise<AnalysisResponse> {
+  const result = await analyzeSupplementDetailed(input, options);
+
+  if (result.ok && result.analysis) {
+    return result.analysis;
+  }
+
+  throw new APIError(
+    404,
+    'NO_SUPPLEMENT_MATCH',
+    result.message ?? 'No supplement match found',
+    'No supplement match found.',
+    { searchMeta: result.searchMeta, matches: result.matches },
+  );
+}
+
+export interface CreateScanInput {
+  imageUrl?: string;
+  ocrText: string;
+  ocrConfidence?: number;
+  ocrResult?: Partial<OCRResult>;
+  userId?: string;
+}
+
+export interface CreateScanResponse {
+  scan: Scan | null;
+  persisted?: boolean;
+}
+
+export async function createScan(
+  input: CreateScanInput,
+  options: ApiRequestOptions = {}
+): Promise<CreateScanResponse> {
+  const response = await makeRequest<CreateScanResponse & { persisted?: boolean }>(
+    '/api/scans',
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+      ...options,
+    },
+  );
+
+  if (response?.persisted === false) {
+    return response as CreateScanResponse;
+  }
+
+  if (
+    !response ||
+    typeof response !== 'object' ||
+    !('scan' in response) ||
+    !response.scan ||
+    typeof response.scan !== 'object'
+  ) {
+    console.error('[DEBUG] createScan invalid response', { response });
+    throw new APIError(
+      500,
+      'INVALID_SCAN_RESPONSE',
+      'Scan persistence returned unexpected payload',
+      'Scan persistence failed.',
+      response,
+    );
+  }
+
+  const scanId = (response.scan as Scan).id;
+  if (!scanId || typeof scanId !== 'string') {
+    console.error('[DEBUG] createScan missing id', { scan: response.scan });
+    throw new APIError(
+      500,
+      'INVALID_SCAN_RESPONSE',
+      'Scan persistence returned payload without id',
+      'Scan persistence failed.',
+      response,
+    );
+  }
+
+  return response;
+}
+
+export async function getScanHistory(
+  params: { userId?: string; limit?: number } = {},
+  options: ApiRequestOptions = {}
+): Promise<ScanHistoryResponse> {
+  const search = new URLSearchParams();
+  if (params.userId) {
+    search.set('userId', params.userId);
+  }
+  if (params.limit) {
+    search.set('limit', String(params.limit));
+  }
+  const query = search.toString();
+  const endpoint = query ? `/api/scans?${query}` : '/api/scans';
+  return makeRequest<ScanHistoryResponse>(endpoint, options);
+}
+
+export interface AnalyzeServiceResponse {
+  ok: boolean;
+  confidence: number;
+  analysis: AnalysisResponse | null;
+  matches?: Supplement[];
+  searchMeta?: {
+    query?: string;
+    normalized?: string;
+    tokens?: string[];
+    brand?: string | null;
+    resultCount?: number;
+    [key: string]: unknown;
+  };
+  message?: string;
+  [key: string]: unknown;
 }
 
 export interface SearchParams {
@@ -193,7 +350,28 @@ export async function searchSupplements(params: SearchParams, options: ApiReques
   if (params.page) searchParams.set('page', params.page.toString());
   if (params.limit) searchParams.set('limit', params.limit.toString());
 
-  return makeRequest<SearchResponse>(`/api/search?${searchParams.toString()}`, options);
+  try {
+    const response = await makeRequest<SearchResponse>(`/api/search?${searchParams.toString()}`, options);
+    const parsed = searchResponseSchema.safeParse(response);
+    if (!parsed.success) {
+      console.error('[DEBUG] searchSupplements validation/error', parsed.error, { body: response });
+      dispatchSearchErrorEvent(parsed.error);
+      throw new APIError(
+        0,
+        'VALIDATION_ERROR',
+        'Invalid search response payload',
+        'Search results validation failed.',
+        parsed.error.flatten(),
+      );
+    }
+    return parsed.data as SearchResponse;
+  } catch (error) {
+    if (!(error instanceof APIError && error.code === 'VALIDATION_ERROR')) {
+      console.error('[DEBUG] searchSupplements error', error);
+      dispatchSearchErrorEvent(error);
+    }
+    throw error;
+  }
 }
 
 export async function advancedSearch(
@@ -216,15 +394,6 @@ export async function advancedSearch(
     body: JSON.stringify(params),
     ...options,
   });
-}
-
-export async function getScanHistory(userId: string, options: { limit?: number; offset?: number } = {}): Promise<ScanHistoryResponse> {
-  const searchParams = new URLSearchParams();
-  searchParams.set('userId', userId);
-  if (options.limit) searchParams.set('limit', options.limit.toString());
-  if (options.offset) searchParams.set('offset', options.offset.toString());
-
-  return makeRequest<ScanHistoryResponse>(`/api/analyze?${searchParams.toString()}`);
 }
 
 export async function getUploadInfo(): Promise<{
@@ -252,7 +421,9 @@ export function isRateLimitError(error: unknown): boolean {
 
 export const apiClient = {
   uploadImage,
+  createScan,
   analyzeSupplement,
+  analyzeSupplementDetailed,
   searchSupplements,
   advancedSearch,
   getScanHistory,

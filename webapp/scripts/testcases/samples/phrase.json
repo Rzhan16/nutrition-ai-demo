@@ -1,0 +1,29 @@
+{
+  "item": {
+    "brand": "Sample Labs",
+    "product": "Focus Complex"
+  },
+  "imgPath": "sample-phrase-image",
+  "ocr": {
+    "words": [
+      {
+        "text": "DETARY",
+        "confidence": 0.52,
+        "line_id": 1,
+        "bbox": [0, 0, 100, 18]
+      },
+      {
+        "text": "SURRLEMENT",
+        "confidence": 0.5,
+        "line_id": 1,
+        "bbox": [110, 0, 220, 18]
+      },
+      {
+        "text": "serving",
+        "confidence": 0.98,
+        "line_id": 2,
+        "bbox": [0, 30, 100, 48]
+      }
+    ]
+  }
+}

@@ -15,7 +15,12 @@
     "db:reset": "prisma db push --force-reset && npm run db:seed",
     "postinstall": "prisma generate && npm run stage:tess",
     "stage:tess": "node scripts/copy-tesseract-assets.mjs",
-    "check:secrets": "node scripts/check-secrets.js"
+    "check:secrets": "node scripts/check-secrets.js",
+    "learn:from-results": "tsc --project ./webapp/scripts/tsconfig.json && node dist/scripts/learn-from-results.js",
+    "test:auto-learn": "tsc --project ./webapp/scripts/tsconfig.json && node dist/scripts/testcases/learn-from-results.smoke.js",
+    "build:scripts": "tsc --project ./webapp/scripts/tsconfig.json",
+    "run:ocr:ts": "node dist/batch-ocr.js",
+    "test:ocr": "node dist/scripts/testcases/run-tests.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.1",
@@ -36,6 +41,7 @@
     "clsx": "^2.1.1",
     "express-rate-limit": "^8.1.0",
     "framer-motion": "^12.23.12",
+    "fuse.js": "^6.6.2",
     "html5-qrcode": "2.3.8",
     "lucide-react": "^0.542.0",
     "multer": "^2.0.2",

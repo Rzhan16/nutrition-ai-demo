@@ -34,6 +34,14 @@ async function copyFileOrThrow(label, sourcePath, targetName, moduleId) {
   console.log(`[tesseract-assets] Copied ${label} -> ${path.relative(cwd, destination)}`)
 }
 
+function findFirstExisting(paths) {
+  for (const p of paths) {
+    const resolved = resolveOptional(p)
+    if (resolved) return resolved
+  }
+  return null
+}
+
 async function run() {
   const missing = []
 
@@ -42,7 +50,7 @@ async function run() {
 
   const coreCandidates = [
     { id: 'tesseract.js-core/tesseract-core.wasm', name: 'tesseract-core.wasm' },
-    { id: 'tesseract.js-core/tesseract-core.wasm.js', name: 'tesseract-core.wasm.js' }
+    { id: 'tesseract.js-core/tesseract-core.wasm.js', name: 'tesseract-core.wasm.js' },
   ]
 
   const resolvedCores = coreCandidates
@@ -53,24 +61,34 @@ async function run() {
     missing.push(...coreCandidates.map(candidate => candidate.id))
   }
 
-function findFirstExisting(paths) {
-  for (const p of paths) {
-    const resolved = resolveOptional(p);
-    if (resolved) return resolved;
-  }
-  return null;
-}
+  const dataAssets = [
+    {
+      label: 'language (eng)',
+      target: 'eng.traineddata.gz',
+      candidates: [
+        '@tesseract.js-data/eng/eng.traineddata.gz',
+        '@tesseract.js-data/eng/4.0.0/eng.traineddata.gz',
+        '@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz',
+      ],
+    },
+    {
+      label: 'orientation script (osd)',
+      target: 'osd.traineddata.gz',
+      candidates: [
+        '@tesseract.js-data/osd/osd.traineddata.gz',
+        '@tesseract.js-data/osd/4.0.0/osd.traineddata.gz',
+        '@tesseract.js-data/osd/4.0.0_best_int/osd.traineddata.gz',
+      ],
+    },
+  ]
 
-const langCandidates = [
-  '@tesseract.js-data/eng/eng.traineddata.gz',
-  '@tesseract.js-data/eng/4.0.0/eng.traineddata.gz',
-  '@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz',
-];
-
-const languagePath = findFirstExisting(langCandidates);
-if (!languagePath) {
-  missing.push(...langCandidates);
-}
+  const resolvedData = dataAssets.map(asset => {
+    const path = findFirstExisting(asset.candidates)
+    if (!path) {
+      missing.push(...asset.candidates)
+    }
+    return { ...asset, path }
+  })
 
   if (missing.length > 0) {
     throw new Error(`Failed to locate required Tesseract assets:\n- ${missing.join('\n- ')}`)
@@ -84,7 +102,9 @@ if (!languagePath) {
     await copyFileOrThrow(`core (${core.name})`, core.path, core.name, core.id)
   }
 
-  await copyFileOrThrow('language (eng)', languagePath, 'eng.traineddata.gz', '@tesseract.js/language-eng/eng.traineddata.gz')
+  for (const asset of resolvedData) {
+    await copyFileOrThrow(asset.label, asset.path, asset.target, asset.candidates[0])
+  }
 
   console.log('[tesseract-assets] All assets copied successfully')
 }

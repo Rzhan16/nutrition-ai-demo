@@ -39,6 +39,9 @@ export interface Scan {
   analysis?: AnalysisResponse;
   userId?: string;
   createdAt: Date;
+  ocrConfidence?: number;
+  ocrData?: OCRResult | null;
+  ingredients?: ParsedIngredient[];
 }
 
 export interface AnalysisRequest {
@@ -187,6 +190,7 @@ export interface OCRResult {
   text: string;
   confidence: number;
   durationMs: number;
+  scanId?: string;
   words?: OCRWord[];
   bbox?: OCRBoundingBox[];
   wasAborted?: boolean;
@@ -224,6 +228,7 @@ export interface OCRDiagnostics {
   belowThreshold: boolean;
   wordCount: number;
   detectedOrientationDegrees: number;
+  orientationConfidence?: number;
   appliedRotationDegrees: number;
   durationMs: number;
   timestamp: string;
@@ -237,6 +242,7 @@ export interface OCRDiagnostics {
     sourceStdDeviation: number;
     denoiseApplied: boolean;
     autoThreshold: boolean;
+    enhancedRetry?: boolean;
   };
 }
 
